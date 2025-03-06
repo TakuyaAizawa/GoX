@@ -1,0 +1,45 @@
+# バイナリ類
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# テスト関連
+*.test
+*.out
+coverage.out
+
+# 依存関係
+vendor/
+
+# 環境設定
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# IDE設定
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS関連
+.DS_Store
+Thumbs.db
+
+# ログファイル
+logs/
+*.log
+
+# ビルド成果物
+build/
+dist/
+
+# その他
+tmp/
+.tmp/ 
+document/*
