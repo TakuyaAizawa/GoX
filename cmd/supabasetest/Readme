@@ -1,0 +1,7 @@
+マイグレーションの実行
+go run main.go
+
+マイグレーションのロールバック
+go run main.go --rollback
+
+

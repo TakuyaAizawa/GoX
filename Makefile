@@ -42,6 +42,14 @@ migrate-create:
 	@read -p "Migration name: " name; \
 	migrate create -ext sql -dir migrations -seq $$name
 
+# データベースセットアップ
+db-setup:
+	go run cmd/dbsetup/main.go
+
+# データベースマイグレーションロールバック
+db-rollback:
+	go run cmd/dbsetup/main.go --rollback
+
 # Swaggerドキュメント生成
 swagger:
 	swag init -g cmd/api/main.go -o docs/swagger
