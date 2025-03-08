@@ -43,3 +43,6 @@ dist/
 tmp/
 .tmp/ 
 document/*
+temp/*
+script_ignore
+script.py
