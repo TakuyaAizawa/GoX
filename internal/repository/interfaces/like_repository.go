@@ -3,8 +3,8 @@ package interfaces
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/TakuyaAizawa/gox/internal/domain/models"
+	"github.com/google/uuid"
 )
 
 // LikeRepository いいね関連のデータアクセスのインターフェースを定義

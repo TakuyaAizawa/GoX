@@ -27,10 +27,10 @@ func TestLikeRepository(t *testing.T) {
 
 	// テストユーザーの作成
 	user1 := &models.User{
-		ID:            uuid.New(),
-		Username:      "user1",
-		Email:         "user1@example.com",
-		Password:      "hashedpassword",
+		ID:           uuid.New(),
+		Username:     "user1",
+		Email:        "user1@example.com",
+		Password:     "hashedpassword",
 		Name:         "User 1",
 		Bio:          "Test bio",
 		ProfileImage: "https://example.com/image.jpg",
@@ -39,10 +39,10 @@ func TestLikeRepository(t *testing.T) {
 	}
 
 	user2 := &models.User{
-		ID:            uuid.New(),
-		Username:      "user2",
-		Email:         "user2@example.com",
-		Password:      "hashedpassword",
+		ID:           uuid.New(),
+		Username:     "user2",
+		Email:        "user2@example.com",
+		Password:     "hashedpassword",
 		Name:         "User 2",
 		Bio:          "Test bio",
 		ProfileImage: "https://example.com/image.jpg",
