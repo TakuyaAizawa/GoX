@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
 
 	"github.com/TakuyaAizawa/gox/internal/domain/models"
@@ -57,16 +58,30 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 	}
 
 	// 現在のユーザーIDを取得
-	currentUserIDStr, exists := c.Get("userID")
+	currentUserIDInterface, exists := c.Get("userID")
 	if !exists {
 		response.Unauthorized(c, "認証が必要です")
 		return
 	}
 
-	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
-	if err != nil {
-		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
+	// 型変換エラーを防ぐため、安全に型変換を行う
+	var currentUserID uuid.UUID
+	var err error
+
+	// 型に応じた変換処理
+	switch v := currentUserIDInterface.(type) {
+	case uuid.UUID:
+		currentUserID = v
+	case string:
+		currentUserID, err = uuid.Parse(v)
+		if err != nil {
+			h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err, "value", v)
+			response.InternalServerError(c, "認証処理に問題が発生しました")
+			return
+		}
+	default:
+		h.log.Error("ユーザーIDの型変換に失敗しました", "type", fmt.Sprintf("%T", currentUserIDInterface))
+		response.InternalServerError(c, "認証処理に問題が発生しました")
 		return
 	}
 
@@ -440,7 +455,26 @@ func (h *PostHandler) LikePost(c *gin.Context) {
 		response.Unauthorized(c, "認証が必要です")
 		return
 	}
-	currentUserID := currentUserIDInterface.(uuid.UUID)
+
+	// 型変換エラーを防ぐため、安全に型変換を行う
+	var currentUserID uuid.UUID
+
+	// 型に応じた変換処理
+	switch v := currentUserIDInterface.(type) {
+	case uuid.UUID:
+		currentUserID = v
+	case string:
+		currentUserID, err = uuid.Parse(v)
+		if err != nil {
+			h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err, "value", v)
+			response.InternalServerError(c, "認証処理に問題が発生しました")
+			return
+		}
+	default:
+		h.log.Error("ユーザーIDの型変換に失敗しました", "type", fmt.Sprintf("%T", currentUserIDInterface))
+		response.InternalServerError(c, "認証処理に問題が発生しました")
+		return
+	}
 
 	// 投稿の存在確認
 	post, err := h.postRepo.GetByID(c.Request.Context(), postID)
@@ -508,16 +542,29 @@ func (h *PostHandler) UnlikePost(c *gin.Context) {
 	}
 
 	// 現在のユーザーIDを取得
-	currentUserIDStr, exists := c.Get("userID")
+	currentUserIDInterface, exists := c.Get("userID")
 	if !exists {
 		response.Unauthorized(c, "認証が必要です")
 		return
 	}
 
-	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
-	if err != nil {
-		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
+	// 型変換エラーを防ぐため、安全に型変換を行う
+	var currentUserID uuid.UUID
+
+	// 型に応じた変換処理
+	switch v := currentUserIDInterface.(type) {
+	case uuid.UUID:
+		currentUserID = v
+	case string:
+		currentUserID, err = uuid.Parse(v)
+		if err != nil {
+			h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err, "value", v)
+			response.InternalServerError(c, "認証処理に問題が発生しました")
+			return
+		}
+	default:
+		h.log.Error("ユーザーIDの型変換に失敗しました", "type", fmt.Sprintf("%T", currentUserIDInterface))
+		response.InternalServerError(c, "認証処理に問題が発生しました")
 		return
 	}
 

@@ -47,11 +47,36 @@ const PostCard = ({ post, onLike, onUnlike, onReply, isDetail = false }: PostCar
         setLikesCount(prev => prev + 1);
         onLike?.(post.id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('いいね処理エラー:', err);
-      setError('処理に失敗しました');
-      // エラー状態を3秒後にクリア
-      setTimeout(() => setError(null), 3000);
+      
+      // エラーメッセージの選定
+      let errorMessage = 'いいね処理に失敗しました';
+      
+      if (err.response) {
+        // サーバーからのエラーレスポンスがある場合
+        const status = err.response.status;
+        
+        if (status === 401) {
+          errorMessage = '認証が必要です。再ログインしてください';
+        } else if (status === 403) {
+          errorMessage = 'この操作は許可されていません';
+        } else if (status === 404) {
+          errorMessage = '投稿が見つかりません';
+        } else if (status === 429) {
+          errorMessage = 'リクエストが多すぎます。しばらく待ってから再試行してください';
+        } else if (status >= 500) {
+          errorMessage = 'サーバーエラーが発生しました。しばらくしてから再試行してください';
+        }
+      } else if (err.request) {
+        // リクエストは送信されたがレスポンスがない場合
+        errorMessage = 'サーバーに接続できません。ネットワーク接続を確認してください';
+      }
+      
+      setError(errorMessage);
+      
+      // エラー状態を5秒後にクリア
+      setTimeout(() => setError(null), 5000);
     } finally {
       setIsSubmitting(false);
     }

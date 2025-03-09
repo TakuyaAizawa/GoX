@@ -8,6 +8,7 @@ import (
 	"github.com/TakuyaAizawa/gox/internal/util/response"
 	"github.com/TakuyaAizawa/gox/pkg/logger"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 // JWT認証のためのミドルウェア
@@ -39,8 +40,17 @@ func Auth(jwtUtil *jwt.JWTUtil, log logger.Logger) gin.HandlerFunc {
 			return
 		}
 
-		// ユーザーIDをコンテキストに設定
-		c.Set("userID", claims.UserID)
+		// ユーザーIDを文字列からUUIDに変換
+		userID, err := uuid.Parse(claims.UserID)
+		if err != nil {
+			log.Error("ユーザーIDのパースに失敗しました", "error", err, "userID", claims.UserID)
+			response.InternalServerError(c, "認証情報の処理に失敗しました")
+			c.Abort()
+			return
+		}
+
+		// ユーザーIDをコンテキストに設定（UUID型で設定）
+		c.Set("userID", userID)
 
 		// その他のユーザー情報を必要に応じて設定
 		if claims.Username != "" {

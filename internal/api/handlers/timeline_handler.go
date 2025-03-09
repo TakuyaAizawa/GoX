@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 
@@ -42,16 +43,30 @@ func NewTimelineHandler(
 // フォローしているユーザーの投稿を時系列順で取得する
 func (h *TimelineHandler) GetHomeTimeline(c *gin.Context) {
 	// 現在のユーザーIDを取得
-	currentUserIDStr, exists := c.Get("userID")
+	currentUserIDInterface, exists := c.Get("userID")
 	if !exists {
 		response.Unauthorized(c, "認証が必要です")
 		return
 	}
 
-	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
-	if err != nil {
-		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
+	// 型変換エラーを防ぐため、安全に型変換を行う
+	var currentUserID uuid.UUID
+	var err error
+
+	// 型に応じた変換処理
+	switch v := currentUserIDInterface.(type) {
+	case uuid.UUID:
+		currentUserID = v
+	case string:
+		currentUserID, err = uuid.Parse(v)
+		if err != nil {
+			h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err, "value", v)
+			response.InternalServerError(c, "認証処理に問題が発生しました")
+			return
+		}
+	default:
+		h.log.Error("ユーザーIDの型変換に失敗しました", "type", fmt.Sprintf("%T", currentUserIDInterface))
+		response.InternalServerError(c, "認証処理に問題が発生しました")
 		return
 	}
 
@@ -255,8 +270,23 @@ func (h *TimelineHandler) GetExploreTimeline(c *gin.Context) {
 
 	// 現在のユーザーID（認証済みの場合）
 	var currentUserID uuid.UUID
-	if currentUserIDStr, exists := c.Get("userID"); exists {
-		currentUserID, _ = uuid.Parse(currentUserIDStr.(string))
+	if currentUserIDInterface, exists := c.Get("userID"); exists {
+		// 型に応じた安全な変換
+		switch v := currentUserIDInterface.(type) {
+		case uuid.UUID:
+			currentUserID = v
+		case string:
+			parsedUUID, err := uuid.Parse(v)
+			if err != nil {
+				h.log.Warn("ユーザーIDのパースに失敗しました", "error", err, "value", v)
+				// 認証が必須でないので処理は続行
+			} else {
+				currentUserID = parsedUUID
+			}
+		default:
+			h.log.Warn("ユーザーIDの型変換に失敗しました", "type", fmt.Sprintf("%T", currentUserIDInterface))
+			// 認証が必須でないので処理は続行
+		}
 	}
 
 	// 投稿の総数を概算
