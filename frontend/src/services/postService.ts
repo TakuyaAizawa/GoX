@@ -32,7 +32,7 @@ export const getHomeTimeline = async (params?: TimelineParams): Promise<Post[]> 
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`http://localhost:8080/api/v1/timeline/home${query}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/timeline/home${query}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -65,7 +65,7 @@ export const getExploreTimeline = async (params?: TimelineParams): Promise<Post[
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`http://localhost:8080/api/v1/timeline/explore${query}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/timeline/explore${query}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -93,7 +93,7 @@ export const getExploreTimeline = async (params?: TimelineParams): Promise<Post[
  */
 export const createPost = async (content: string, parentId?: string): Promise<Post> => {
   try {
-    const response = await fetch('http://localhost:8080/api/v1/posts', {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -125,7 +125,7 @@ export const createPost = async (content: string, parentId?: string): Promise<Po
  */
 export const likePost = async (postId: string): Promise<void> => {
   try {
-    const response = await fetch(`http://localhost:8080/api/v1/posts/${postId}/like`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts/${postId}/like`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -147,7 +147,7 @@ export const likePost = async (postId: string): Promise<void> => {
  */
 export const unlikePost = async (postId: string): Promise<void> => {
   try {
-    const response = await fetch(`http://localhost:8080/api/v1/posts/${postId}/like`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts/${postId}/like`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -169,7 +169,7 @@ export const unlikePost = async (postId: string): Promise<void> => {
  */
 export const getPost = async (postId: string): Promise<Post> => {
   try {
-    const response = await fetch(`http://localhost:8080/api/v1/posts/${postId}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts/${postId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -201,7 +201,7 @@ export const getReplies = async (postId: string, params?: TimelineParams): Promi
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`http://localhost:8080/api/v1/posts/${postId}/replies${query}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts/${postId}/replies${query}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -228,7 +228,7 @@ export const getReplies = async (postId: string, params?: TimelineParams): Promi
  */
 export const deletePost = async (postId: string): Promise<void> => {
   try {
-    const response = await fetch(`http://localhost:8080/api/v1/posts/${postId}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts/${postId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

@@ -64,7 +64,7 @@ export const register = async (userData: RegisterData): Promise<AuthResponse> =>
     };
     
     // 直接APIエンドポイントにPOSTリクエストを送信
-    const response = await fetch('http://localhost:8080/api/v1/auth/register', {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

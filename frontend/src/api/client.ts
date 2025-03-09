@@ -2,7 +2,7 @@ import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { logApiResponse, logApiError, PerformanceTimer } from '../components/debug/DebugHelper';
 
 // 完全な基本URLを指定
-const API_BASE_URL = 'http://localhost:8080/api/v1';
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}`;
 
 // Axiosタイプ拡張
 declare module 'axios' {

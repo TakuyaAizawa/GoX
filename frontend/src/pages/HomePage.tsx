@@ -41,7 +41,7 @@ const HomePage = () => {
                       : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white'
                   }`}
                 >
-                  ホーム
+                  home
                 </button>
                 <button
                   onClick={() => setActiveTab('explore')}
@@ -51,7 +51,7 @@ const HomePage = () => {
                       : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white'
                   }`}
                 >
-                  エクスプローラー
+                  inbox
                 </button>
                 <Link
                   to="/notifications"

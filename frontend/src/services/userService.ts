@@ -25,7 +25,7 @@ export interface UserProfileParams {
  */
 export const getUserProfile = async (username: string): Promise<User> => {
   try {
-    const response = await fetch(`http://localhost:8080/api/v1/users/${username}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/${username}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -58,7 +58,7 @@ export const getUserPosts = async (username: string, params?: UserProfileParams)
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`http://localhost:8080/api/v1/users/${username}/posts${query}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/${username}/posts${query}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -86,7 +86,7 @@ export const getUserPosts = async (username: string, params?: UserProfileParams)
  */
 export const followUser = async (username: string): Promise<void> => {
   try {
-    const response = await fetch(`http://localhost:8080/api/v1/users/${username}/follow`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/${username}/follow`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -108,7 +108,7 @@ export const followUser = async (username: string): Promise<void> => {
  */
 export const unfollowUser = async (username: string): Promise<void> => {
   try {
-    const response = await fetch(`http://localhost:8080/api/v1/users/${username}/follow`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/${username}/follow`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -135,7 +135,7 @@ export const getFollowers = async (username: string, params?: UserProfileParams)
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`http://localhost:8080/api/v1/users/${username}/followers${query}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/${username}/followers${query}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -167,7 +167,7 @@ export const getFollowing = async (username: string, params?: UserProfileParams)
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`http://localhost:8080/api/v1/users/${username}/following${query}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/users/${username}/following${query}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',

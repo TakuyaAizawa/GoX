@@ -62,7 +62,7 @@ const RegisterPage = () => {
       console.log('登録リクエスト:', registrationData);
       
       // 直接Fetch APIを使用してリクエスト
-      const response = await fetch('http://localhost:8080/api/v1/auth/register', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
