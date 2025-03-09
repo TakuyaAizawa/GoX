@@ -46,3 +46,4 @@ document/*
 temp/*
 script_ignore
 script.py
+uploads/*

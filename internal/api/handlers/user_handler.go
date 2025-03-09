@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
 
-	"github.com/TakuyaAizawa/gox/internal/repository/interfaces"
+	"github.com/TakuyaAizawa/gox/internal/interfaces"
+	repointerfaces "github.com/TakuyaAizawa/gox/internal/repository/interfaces"
 	"github.com/TakuyaAizawa/gox/internal/service"
 	"github.com/TakuyaAizawa/gox/internal/util/response"
 	"github.com/TakuyaAizawa/gox/pkg/logger"
@@ -13,19 +15,21 @@ import (
 
 // UserHandler ユーザー関連のハンドラーを管理する構造体
 type UserHandler struct {
-	userRepo            interfaces.UserRepository
-	followRepo          interfaces.FollowRepository
-	postRepo            interfaces.PostRepository
+	userRepo            repointerfaces.UserRepository
+	followRepo          repointerfaces.FollowRepository
+	postRepo            repointerfaces.PostRepository
 	notificationService *service.NotificationService
+	storageProvider     interfaces.StorageProvider
 	log                 logger.Logger
 }
 
 // NewUserHandler 新しいユーザーハンドラーを作成する
 func NewUserHandler(
-	userRepo interfaces.UserRepository,
-	followRepo interfaces.FollowRepository,
-	postRepo interfaces.PostRepository,
+	userRepo repointerfaces.UserRepository,
+	followRepo repointerfaces.FollowRepository,
+	postRepo repointerfaces.PostRepository,
 	notificationService *service.NotificationService,
+	storageProvider interfaces.StorageProvider,
 	log logger.Logger,
 ) *UserHandler {
 	return &UserHandler{
@@ -33,6 +37,7 @@ func NewUserHandler(
 		followRepo:          followRepo,
 		postRepo:            postRepo,
 		notificationService: notificationService,
+		storageProvider:     storageProvider,
 		log:                 log,
 	}
 }
@@ -589,4 +594,156 @@ func (h *UserHandler) GetUserPosts(c *gin.Context) {
 			"total_pages": totalPages,
 		},
 	})
+}
+
+// UploadAvatar プロフィールアバター画像をアップロードするハンドラー
+func (h *UserHandler) UploadAvatar(c *gin.Context) {
+	// リクエストからJWTのユーザーIDを取得
+	userIDStr, exists := c.Get("userID")
+	if !exists {
+		response.Unauthorized(c, "認証が必要です")
+		return
+	}
+
+	// 文字列のユーザーIDをUUIDに変換
+	userIDString, ok := userIDStr.(string)
+	if !ok {
+		response.InternalServerError(c, "無効なユーザーIDフォーマット")
+		return
+	}
+
+	userID, err := uuid.Parse(userIDString)
+	if err != nil {
+		h.log.Error("ユーザーIDの解析に失敗しました", "error", err)
+		response.InternalServerError(c, "無効なユーザーIDフォーマット")
+		return
+	}
+
+	// ファイルのマルチパートフォームデータを取得
+	file, header, err := c.Request.FormFile("avatar")
+	if err != nil {
+		response.BadRequest(c, "ファイルのアップロードに失敗しました: "+err.Error(), nil)
+		return
+	}
+	defer file.Close()
+
+	// ファイルタイプを検証
+	if !isValidImageType(header.Filename) {
+		response.BadRequest(c, "サポートされていないファイル形式です。JPG、PNG、GIF形式のみ許可されています", nil)
+		return
+	}
+
+	// ファイルサイズを検証 (2MB以下)
+	if header.Size > 2*1024*1024 {
+		response.BadRequest(c, "ファイルサイズが大きすぎます。2MB以下のファイルをアップロードしてください", nil)
+		return
+	}
+
+	// ストレージに保存するパスを生成
+	path := fmt.Sprintf("users/%s/avatar", userID.String())
+
+	// ストレージプロバイダを使ってファイルを保存
+	fileURL, err := h.storageProvider.SaveFile(c.Request.Context(), path, header.Filename, file, header.Size)
+	if err != nil {
+		h.log.Error("アバター画像の保存に失敗しました", "error", err)
+		response.InternalServerError(c, "ファイルの保存に失敗しました")
+		return
+	}
+
+	// ユーザープロフィールのアバターURLを更新
+	if err := h.userRepo.UpdateAvatar(c.Request.Context(), userID, fileURL); err != nil {
+		h.log.Error("アバターURLの更新に失敗しました", "error", err)
+		response.InternalServerError(c, "プロフィールの更新に失敗しました")
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message":    "アバター画像を正常にアップロードしました",
+		"avatar_url": fileURL,
+	})
+}
+
+// UploadBanner プロフィールバナー画像をアップロードするハンドラー
+func (h *UserHandler) UploadBanner(c *gin.Context) {
+	// リクエストからJWTのユーザーIDを取得
+	userIDStr, exists := c.Get("userID")
+	if !exists {
+		response.Unauthorized(c, "認証が必要です")
+		return
+	}
+
+	// 文字列のユーザーIDをUUIDに変換
+	userIDString, ok := userIDStr.(string)
+	if !ok {
+		response.InternalServerError(c, "無効なユーザーIDフォーマット")
+		return
+	}
+
+	userID, err := uuid.Parse(userIDString)
+	if err != nil {
+		h.log.Error("ユーザーIDの解析に失敗しました", "error", err)
+		response.InternalServerError(c, "無効なユーザーIDフォーマット")
+		return
+	}
+
+	// ファイルのマルチパートフォームデータを取得
+	file, header, err := c.Request.FormFile("banner")
+	if err != nil {
+		response.BadRequest(c, "ファイルのアップロードに失敗しました: "+err.Error(), nil)
+		return
+	}
+	defer file.Close()
+
+	// ファイルタイプを検証
+	if !isValidImageType(header.Filename) {
+		response.BadRequest(c, "サポートされていないファイル形式です。JPG、PNG、GIF形式のみ許可されています", nil)
+		return
+	}
+
+	// ファイルサイズを検証 (5MB以下)
+	if header.Size > 5*1024*1024 {
+		response.BadRequest(c, "ファイルサイズが大きすぎます。5MB以下のファイルをアップロードしてください", nil)
+		return
+	}
+
+	// ストレージに保存するパスを生成
+	path := fmt.Sprintf("users/%s/banner", userID.String())
+
+	// ストレージプロバイダを使ってファイルを保存
+	fileURL, err := h.storageProvider.SaveFile(c.Request.Context(), path, header.Filename, file, header.Size)
+	if err != nil {
+		h.log.Error("バナー画像の保存に失敗しました", "error", err)
+		response.InternalServerError(c, "ファイルの保存に失敗しました")
+		return
+	}
+
+	// ユーザープロフィールのバナーURLを更新
+	if err := h.userRepo.UpdateBanner(c.Request.Context(), userID, fileURL); err != nil {
+		h.log.Error("バナーURLの更新に失敗しました", "error", err)
+		response.InternalServerError(c, "プロフィールの更新に失敗しました")
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message":    "バナー画像を正常にアップロードしました",
+		"banner_url": fileURL,
+	})
+}
+
+// 画像ファイルの拡張子が有効かどうかを確認
+func isValidImageType(filename string) bool {
+	validExtensions := map[string]bool{
+		".jpg":  true,
+		".jpeg": true,
+		".png":  true,
+		".gif":  true,
+	}
+
+	ext := ""
+	for i := len(filename) - 1; i >= 0 && filename[i] != '.'; i-- {
+		ext = string(filename[i]) + ext
+	}
+	ext = "." + ext
+
+	return validExtensions[ext]
 }

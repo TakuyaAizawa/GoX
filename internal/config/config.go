@@ -10,13 +10,14 @@ import (
 
 // アプリケーション設定を表す構造体
 type Config struct {
-	App      AppConfig
-	DB       DBConfig
-	Redis    RedisConfig
-	JWT      JWTConfig
-	CORS     CORSConfig
-	Log      LogConfig
+	App       AppConfig
+	DB        DBConfig
+	Redis     RedisConfig
+	JWT       JWTConfig
+	CORS      CORSConfig
+	Log       LogConfig
 	RateLimit RateLimitConfig
+	Storage   StorageConfig
 }
 
 // アプリケーション固有の設定を保持する構造体
@@ -67,6 +68,13 @@ type LogConfig struct {
 type RateLimitConfig struct {
 	Requests int
 	Duration time.Duration
+}
+
+// ストレージ設定を保持する構造体
+type StorageConfig struct {
+	Provider string
+	BaseDir  string
+	BaseURL  string
 }
 
 // 環境変数と.envファイルから設定を読み込む
@@ -130,6 +138,12 @@ func Load() (*Config, error) {
 		Duration: time.Duration(viper.GetInt("rate_limit.duration")) * time.Second,
 	}
 
+	config.Storage = StorageConfig{
+		Provider: viper.GetString("storage.provider"),
+		BaseDir:  viper.GetString("storage.base_dir"),
+		BaseURL:  viper.GetString("storage.base_url"),
+	}
+
 	return &config, nil
 }
 
@@ -169,4 +183,9 @@ func setDefaults() {
 	// レート制限のデフォルト値
 	viper.SetDefault("rate_limit.requests", 100)
 	viper.SetDefault("rate_limit.duration", 60)
-} 
+
+	// ストレージのデフォルト値
+	viper.SetDefault("storage.provider", "local")
+	viper.SetDefault("storage.base_dir", "./uploads")
+	viper.SetDefault("storage.base_url", "http://localhost:8080/media")
+}

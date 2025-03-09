@@ -7,8 +7,10 @@ import (
 	"github.com/TakuyaAizawa/gox/internal/api/handlers"
 	"github.com/TakuyaAizawa/gox/internal/api/middleware"
 	"github.com/TakuyaAizawa/gox/internal/config"
-	"github.com/TakuyaAizawa/gox/internal/repository/interfaces"
+	coreinterfaces "github.com/TakuyaAizawa/gox/internal/interfaces"
+	repointerfaces "github.com/TakuyaAizawa/gox/internal/repository/interfaces"
 	"github.com/TakuyaAizawa/gox/internal/service"
+	"github.com/TakuyaAizawa/gox/internal/storage"
 	"github.com/TakuyaAizawa/gox/internal/util/jwt"
 	"github.com/TakuyaAizawa/gox/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -18,11 +20,11 @@ import (
 func SetupRouter(
 	cfg *config.Config,
 	log logger.Logger,
-	userRepo interfaces.UserRepository,
-	postRepo interfaces.PostRepository,
-	followRepo interfaces.FollowRepository,
-	likeRepo interfaces.LikeRepository,
-	notificationRepo interfaces.NotificationRepository,
+	userRepo repointerfaces.UserRepository,
+	postRepo repointerfaces.PostRepository,
+	followRepo repointerfaces.FollowRepository,
+	likeRepo repointerfaces.LikeRepository,
+	notificationRepo repointerfaces.NotificationRepository,
 ) *gin.Engine {
 	// プロダクションモードの場合はデバッグモードを無効化
 	if cfg.App.Env == "production" {
@@ -40,6 +42,9 @@ func SetupRouter(
 	r.Use(middleware.CORS(cfg.CORS.AllowedOrigins))
 	r.Use(middleware.RateLimit(cfg.RateLimit.Requests, cfg.RateLimit.Duration))
 
+	// メディアファイルの静的配信
+	r.Static("/media", cfg.Storage.BaseDir)
+
 	// ヘルスチェックエンドポイント
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -49,6 +54,15 @@ func SetupRouter(
 
 	// API v1 ルート
 	v1 := r.Group("/api/v1")
+
+	// ストレージプロバイダーの作成
+	var storageProvider coreinterfaces.StorageProvider
+	if cfg.Storage.Provider == "local" {
+		storageProvider = storage.NewLocalStorage(cfg.Storage.BaseDir, cfg.Storage.BaseURL, log)
+	} else {
+		log.Warn("ストレージプロバイダー設定が無効です。ローカルストレージを使用します", "provider", cfg.Storage.Provider)
+		storageProvider = storage.NewLocalStorage(cfg.Storage.BaseDir, cfg.Storage.BaseURL, log)
+	}
 
 	// ハンドラーの作成
 	authHandler := handlers.NewAuthHandler(userRepo, log, jwtUtil)
@@ -69,6 +83,7 @@ func SetupRouter(
 		followRepo,
 		postRepo,
 		notificationService,
+		storageProvider,
 		log,
 	)
 
@@ -119,9 +134,9 @@ func SetupRouter(
 			users.GET("/:username", userHandler.GetUserProfile)
 			users.PUT("/me", userHandler.UpdateProfile)
 
-			// TODO: プロフィール画像アップロード
-			// users.POST("/me/avatar", userHandler.UploadAvatar)
-			// users.POST("/me/banner", userHandler.UploadBanner)
+			// プロフィール画像アップロード
+			users.POST("/me/avatar", userHandler.UploadAvatar)
+			users.POST("/me/banner", userHandler.UploadBanner)
 
 			// フォロー関連
 			users.POST("/:username/follow", userHandler.FollowUser)
