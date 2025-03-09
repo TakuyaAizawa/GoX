@@ -28,6 +28,12 @@ interface AuthState {
   refreshAuthToken: () => Promise<boolean>;
   clearError: () => void;
   updateUser: (userData: Partial<User>) => void;
+  
+  // 追加の直接アクセス関数
+  setUser: (user: User | null) => void;
+  setTokens: (token: string, refreshToken: string) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -129,6 +135,30 @@ export const useAuthStore = create<AuthState>()(
           });
         }
       },
+      
+      // 追加の直接アクセス関数
+      setUser: (user) => {
+        set({
+          user,
+          isAuthenticated: !!user
+        });
+      },
+      
+      setTokens: (token, refreshToken) => {
+        set({
+          token,
+          refreshToken,
+          isAuthenticated: true
+        });
+      },
+      
+      setLoading: (loading) => {
+        set({ loading });
+      },
+      
+      setError: (error) => {
+        set({ error });
+      }
     }),
     {
       name: 'auth-storage',
