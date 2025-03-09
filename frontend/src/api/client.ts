@@ -1,7 +1,27 @@
-import axios from 'axios';
+import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
+import { logApiResponse, logApiError, PerformanceTimer } from '../components/debug/DebugHelper';
 
 // 完全な基本URLを指定
 const API_BASE_URL = 'http://localhost:8080/api/v1';
+
+// Axiosタイプ拡張
+declare module 'axios' {
+  export interface InternalAxiosRequestConfig {
+    metadata?: {
+      startTime?: number;
+      timer?: PerformanceTimer;
+      [key: string]: any;
+    };
+  }
+  
+  export interface AxiosResponse {
+    metadata?: {
+      duration?: number;
+      endpoint?: string;
+      [key: string]: any;
+    };
+  }
+}
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -17,6 +37,13 @@ apiClient.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
+  // パフォーマンス計測開始
+  config.metadata = { 
+    ...config.metadata,
+    startTime: new Date().getTime(),
+    timer: new PerformanceTimer(`API ${config.method?.toUpperCase() ?? 'REQUEST'} ${config.url}`)
+  };
+
   // デバッグ用
   console.log('APIリクエスト:', {
     url: config.url,
@@ -31,20 +58,38 @@ apiClient.interceptors.request.use((config) => {
 // レスポンスインターセプター - エラーハンドリングとトークンリフレッシュ
 apiClient.interceptors.response.use(
   (response) => {
-    // デバッグ用
-    console.log('APIレスポンス:', {
-      status: response.status,
-      data: response.data
-    });
+    // パフォーマンス計測終了
+    const { config } = response;
+    if (config.metadata?.timer) {
+      const duration = config.metadata.timer.stop();
+      response.metadata = { 
+        ...response.metadata, 
+        duration,
+        endpoint: config.url
+      };
+    }
+
+    // API応答をログに記録
+    logApiResponse(response.config.url || 'unknown', response.data);
+    
     return response;
   },
   async (error) => {
-    // デバッグ用
-    console.error('APIエラー:', {
-      status: error.response?.status,
-      data: error.response?.data,
-      message: error.message
-    });
+    // パフォーマンス計測終了（エラー時）
+    const { config } = error;
+    if (config?.metadata?.timer) {
+      config.metadata.timer.stop();
+    }
+
+    // APIエラーをログに記録
+    logApiError(
+      error.config?.url || 'unknown', 
+      {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message
+      }
+    );
 
     const originalRequest = error.config;
     if (error.response?.status === 401 && !originalRequest._retry) {

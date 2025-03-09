@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ["./src/**/*.{js,jsx,ts,tsx}"],
-  darkMode: 'class',
+  darkMode: 'media',
   theme: {
     extend: {
       colors: {
@@ -31,7 +31,16 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['Inter', 'sans-serif'],
+        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+      },
+      backgroundColor: {
+        dark: '#121212',
+      },
+      textColor: {
+        dark: {
+          primary: '#ffffff',
+          secondary: '#a0aec0',
+        },
       },
     },
   },
