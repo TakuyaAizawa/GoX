@@ -3,9 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Post } from '../services/postService';
 import apiClient from '../api/client';
 import ProfileHeader from '../components/profile/ProfileHeader';
+import EditProfileForm from '../components/profile/EditProfileForm';
 import PostCard from '../components/post/PostCard';
 import Button from '../components/ui/Button';
 import PostForm from '../components/post/PostForm';
+import { useAuthStore } from '../store/authStore';
 
 // ProfileHeaderコンポーネントと互換性のあるUserインターフェース
 interface User {
@@ -25,6 +27,7 @@ interface User {
 const ProfilePage = () => {
   const { username } = useParams<{ username: string }>();
   const navigate = useNavigate();
+  const { user: authUser } = useAuthStore();
   const [user, setUser] = useState<User | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,6 +37,10 @@ const ProfilePage = () => {
   const [hasMore, setHasMore] = useState(true);
   const [showReplyForm, setShowReplyForm] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  
+  // 自分のプロフィールかチェック
+  const isOwnProfile = authUser && user && authUser.id === user.id;
   
   // ユーザープロフィール取得
   useEffect(() => {
@@ -46,7 +53,14 @@ const ProfilePage = () => {
       try {
         // ユーザープロフィール取得
         const profileResponse = await apiClient.get(`/users/${username}`);
-        const userData = profileResponse.data.user || profileResponse.data.data?.user;
+        // レスポンス構造に対応
+        const userData = profileResponse.data.user || profileResponse.data.data;
+        
+        if (!userData) {
+          setError('ユーザープロフィールの取得に失敗しました。');
+          return;
+        }
+        
         setUser(userData);
         
         // 投稿取得
@@ -99,7 +113,7 @@ const ProfilePage = () => {
     try {
       // ユーザー情報再取得
       const response = await apiClient.get(`/users/${username}`);
-      const updatedUser = response.data.user || response.data.data?.user;
+      const updatedUser = response.data.user || response.data.data;
       setUser(updatedUser);
     } catch (err) {
       console.error('ユーザー情報再取得エラー:', err);
@@ -110,6 +124,27 @@ const ProfilePage = () => {
   const handlePostCreated = () => {
     setShowReplyForm(false);
     setSelectedPost(null);
+  };
+  
+  // プロフィール編集開始
+  const handleEditProfile = () => {
+    setIsEditing(true);
+  };
+  
+  // プロフィール編集完了
+  const handleEditComplete = async () => {
+    setIsEditing(false);
+    
+    // プロフィール情報を再取得
+    if (username) {
+      try {
+        const response = await apiClient.get(`/users/${username}`);
+        const updatedUser = response.data.user || response.data.data;
+        setUser(updatedUser);
+      } catch (err) {
+        console.error('プロフィール更新後の取得エラー:', err);
+      }
+    }
   };
   
   // 戻るボタン
@@ -131,6 +166,15 @@ const ProfilePage = () => {
             </svg>
           </button>
           <h1 className="text-xl font-bold text-gray-900 dark:text-white">プロフィール</h1>
+          
+          {/* 編集ボタン（自分のプロフィールのみ表示） */}
+          {isOwnProfile && !isEditing && (
+            <div className="ml-auto">
+              <Button onClick={handleEditProfile} size="sm" variant="outline">
+                編集
+              </Button>
+            </div>
+          )}
         </div>
       </header>
       
@@ -149,56 +193,71 @@ const ProfilePage = () => {
           </div>
         ) : (
           <>
-            {/* プロフィールヘッダー */}
-            <ProfileHeader user={user} onFollowChange={handleFollowChange} />
-            
-            {/* リプライフォーム */}
-            {showReplyForm && selectedPost && (
-              <div className="border-b border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
-                <PostForm 
-                  parentId={selectedPost.id}
-                  onPostCreated={handlePostCreated}
-                  onCancel={() => {
-                    setShowReplyForm(false);
-                    setSelectedPost(null);
-                  }}
-                  placeholder="リプライを入力..."
+            {/* プロフィール表示/編集 */}
+            {isEditing ? (
+              <div className="p-4">
+                <EditProfileForm 
+                  user={user}
+                  onSuccess={handleEditComplete}
+                  onCancel={() => setIsEditing(false)}
                 />
               </div>
+            ) : (
+              <ProfileHeader user={user} onFollowChange={handleFollowChange} />
             )}
             
-            {/* 投稿一覧 */}
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              {posts.length === 0 ? (
-                <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-                  <p>投稿がありません</p>
-                </div>
-              ) : (
-                <>
-                  {posts.map(post => (
-                    <PostCard 
-                      key={post.id} 
-                      post={post}
-                      onReply={handleReply}
+            {/* 編集モードでない場合のみ投稿一覧を表示 */}
+            {!isEditing && (
+              <>
+                {/* リプライフォーム */}
+                {showReplyForm && selectedPost && (
+                  <div className="border-b border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-900">
+                    <PostForm 
+                      parentId={selectedPost.id}
+                      onPostCreated={handlePostCreated}
+                      onCancel={() => {
+                        setShowReplyForm(false);
+                        setSelectedPost(null);
+                      }}
+                      placeholder="リプライを入力..."
                     />
-                  ))}
-                  
-                  {/* もっと読み込むボタン */}
-                  {hasMore && (
-                    <div className="p-4 text-center">
-                      <Button 
-                        onClick={loadMorePosts}
-                        variant="secondary"
-                        size="sm"
-                        disabled={postsLoading}
-                      >
-                        {postsLoading ? '読み込み中...' : 'もっと読み込む'}
-                      </Button>
+                  </div>
+                )}
+                
+                {/* 投稿一覧 */}
+                <div className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {posts.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+                      <p>投稿がありません</p>
                     </div>
+                  ) : (
+                    <>
+                      {posts.map(post => (
+                        <PostCard 
+                          key={post.id} 
+                          post={post}
+                          onReply={handleReply}
+                        />
+                      ))}
+                      
+                      {/* もっと読み込むボタン */}
+                      {hasMore && (
+                        <div className="p-4 text-center">
+                          <Button 
+                            onClick={loadMorePosts}
+                            variant="secondary"
+                            size="sm"
+                            disabled={postsLoading}
+                          >
+                            {postsLoading ? '読み込み中...' : 'もっと読み込む'}
+                          </Button>
+                        </div>
+                      )}
+                    </>
                   )}
-                </>
-              )}
-            </div>
+                </div>
+              </>
+            )}
           </>
         )}
       </main>
@@ -206,4 +265,4 @@ const ProfilePage = () => {
   );
 };
 
-export default ProfilePage; 
+export default ProfilePage;

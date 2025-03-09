@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getHomeTimeline, getExploreTimeline, Post } from '../../services/postService';
 import PostCard from '../post/PostCard';
 import PostForm from '../post/PostForm';
+import RealtimeBroadcast from '../broadcast/RealtimeBroadcast';
 
 interface TimelineProps {
   type: 'home' | 'explore';
@@ -90,6 +91,13 @@ const Timeline = ({ type, showPostForm = true }: TimelineProps) => {
       {/* 投稿フォーム */}
       {showPostForm && (
         <PostForm onPostCreated={handlePostCreated} />
+      )}
+      
+      {/* リアルタイムブロードキャスト - ホームタイムラインの場合は新規投稿、探索の場合はトレンド */}
+      {type === 'home' ? (
+        <RealtimeBroadcast type="new_posts" onRefresh={refreshTimeline} />
+      ) : (
+        <RealtimeBroadcast type="trending" />
       )}
       
       {/* エラーメッセージ */}

@@ -1,82 +1,110 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { formatDistance } from 'date-fns';
-import { ja } from 'date-fns/locale';
-import { getNotifications, markAllAsRead, Notification } from '../services/notificationService';
+import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useNotificationStore } from '../store/notificationStore';
 import Button from '../components/ui/Button';
+import Header from '../components/layout/Header';
+import NotificationCard from '../components/notification/NotificationCard';
+import { DisplayNotification } from '../types/notification';
+
+type FilterType = 'all' | 'follow' | 'like' | 'reply' | 'mention';
 
 const NotificationsPage = () => {
   const navigate = useNavigate();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
+  const { 
+    notifications, 
+    loading, 
+    error, 
+    hasMore, 
+    fetchNotifications, 
+    markAsRead, 
+    markAllAsRead 
+  } = useNotificationStore();
+  
   const [loadingMore, setLoadingMore] = useState(false);
+  const [filterType, setFilterType] = useState<FilterType>('all');
   
   // 通知を取得
   useEffect(() => {
-    const fetchNotifications = async () => {
-      setLoading(true);
-      setError(null);
-      
-      try {
-        const data = await getNotifications({ page: 1, limit: 20 });
-        setNotifications(data);
-        setHasMore(data.length === 20);
-      } catch (error) {
-        console.error('通知取得エラー:', error);
-        setError('通知の取得に失敗しました');
-      } finally {
-        setLoading(false);
-      }
-    };
+    fetchNotifications(1);
+  }, [fetchNotifications]);
+  
+  // 通知をフィルタリング
+  const filteredNotifications = useMemo(() => {
+    if (filterType === 'all') {
+      return notifications;
+    }
+    return notifications.filter(notification => notification.type === filterType);
+  }, [notifications, filterType]);
+  
+  // 通知をグループ化（同じタイプ、同じアクターからの短時間の通知をグループ化）
+  const groupedNotifications = useMemo(() => {
+    // 最終的なグループ化された通知リスト
+    const result: DisplayNotification[] = [];
     
-    fetchNotifications();
-  }, []);
+    // コピーして降順ソート
+    const sortedNotifications = [...filteredNotifications].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+    
+    sortedNotifications.forEach(notification => {
+      // すでにグループがあるか探す（過去30分以内、同じアクターと同じタイプ）
+      const existingGroupIndex = result.findIndex(group => {
+        if (group.type !== notification.type) return false;
+        if (group.actor_id !== notification.actor_id) return false;
+        
+        // 30分以内かどうか
+        const timeDiff = Math.abs(
+          new Date(group.created_at).getTime() - new Date(notification.created_at).getTime()
+        );
+        return timeDiff < 30 * 60 * 1000; // 30分 = 30 * 60 * 1000ミリ秒
+      });
+      
+      if (existingGroupIndex !== -1) {
+        // グループが見つかった場合はカウントを増やす
+        const group = result[existingGroupIndex];
+        result[existingGroupIndex] = {
+          ...group,
+          count: (group.count || 1) + 1,
+          // 既読状態：グループ内で1つでも未読があれば未読とする
+          read: group.read && notification.read
+        };
+      } else {
+        // 新しいグループを作成
+        result.push({ ...notification, count: 1 });
+      }
+    });
+    
+    return result;
+  }, [filteredNotifications]);
   
   // 追加の通知を読み込む
   const loadMoreNotifications = async () => {
     if (loadingMore || !hasMore) return;
     
     setLoadingMore(true);
-    
     try {
-      const nextPage = page + 1;
-      const data = await getNotifications({ page: nextPage, limit: 20 });
-      
-      if (data.length > 0) {
-        setNotifications(prev => [...prev, ...data]);
-        setPage(nextPage);
-      }
-      
-      setHasMore(data.length === 20);
-    } catch (error) {
-      console.error('追加通知取得エラー:', error);
+      await fetchNotifications(Math.ceil(notifications.length / 20) + 1);
     } finally {
       setLoadingMore(false);
     }
   };
   
-  // 全ての通知を既読にする
-  const handleMarkAllAsRead = async () => {
-    try {
-      await markAllAsRead();
-      // 既読状態を更新
-      setNotifications(prev => 
-        prev.map(notification => ({ ...notification, is_read: true }))
-      );
-    } catch (error) {
-      console.error('通知既読エラー:', error);
-    }
+  // 特定の通知を既読にする
+  const handleMarkAsRead = async (notificationId: string) => {
+    await markAsRead([notificationId]);
   };
   
   // 通知に基づくアクション
-  const handleNotificationClick = (notification: Notification) => {
+  const handleNotificationClick = (notification: DisplayNotification) => {
+    // 未読なら既読にする
+    if (!notification.read) {
+      handleMarkAsRead(notification.id);
+    }
+    
     if (notification.type === 'like' || notification.type === 'reply') {
       // 投稿詳細ページに移動
-      if (notification.target_id) {
-        navigate(`/post/${notification.target_id}`);
+      if (notification.post_id) {
+        navigate(`/post/${notification.post_id}`);
       }
     } else if (notification.type === 'follow') {
       // ユーザープロフィールページに移動
@@ -84,74 +112,89 @@ const NotificationsPage = () => {
     }
   };
   
-  // 日付をフォーマット
-  const formatDate = (dateString: string) => {
-    return formatDistance(new Date(dateString), new Date(), {
-      addSuffix: true,
-      locale: ja
-    });
-  };
-  
-  // 通知タイプに基づくアイコンを取得
-  const getNotificationIcon = (type: string) => {
-    switch (type) {
-      case 'like':
-        return '❤️';
-      case 'follow':
-        return '👤';
-      case 'reply':
-        return '💬';
-      default:
-        return '🔔';
-    }
-  };
-  
-  // 通知メッセージを取得
-  const getNotificationMessage = (notification: Notification) => {
-    switch (notification.type) {
-      case 'like':
-        return `${notification.actor_display_name}さんがあなたの投稿にいいねしました`;
-      case 'follow':
-        return `${notification.actor_display_name}さんがあなたをフォローしました`;
-      case 'reply':
-        return `${notification.actor_display_name}さんがあなたの投稿にリプライしました`;
-      default:
-        return '新しい通知があります';
-    }
-  };
-  
-  // 戻るボタンのハンドラー
-  const handleGoBack = () => {
-    navigate(-1); // ブラウザの履歴で1つ前に戻る
+  // フィルターを変更する
+  const handleFilterChange = (type: FilterType) => {
+    setFilterType(type);
   };
   
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* ヘッダー */}
-      <header className="bg-white dark:bg-gray-800 shadow-sm sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
-            <button
-              onClick={handleGoBack}
-              className="text-gray-500 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
-            >
-              ← 戻る
-            </button>
+      <Header />
+      
+      {/* サブヘッダー */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-14 z-10">
+        <div className="max-w-3xl mx-auto px-4">
+          <div className="flex items-center justify-between py-2">
             <h1 className="text-lg font-bold text-gray-900 dark:text-white">通知</h1>
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={handleMarkAllAsRead}
-              disabled={notifications.every(n => n.is_read) || notifications.length === 0}
+              onClick={markAllAsRead}
+              disabled={notifications.every(n => n.read) || notifications.length === 0}
             >
               すべて既読
             </Button>
           </div>
+          
+          {/* フィルタータブ */}
+          <div className="flex space-x-1 pb-1 overflow-x-auto">
+            <button
+              onClick={() => handleFilterChange('all')}
+              className={`px-3 py-2 text-sm rounded-md ${
+                filterType === 'all'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+              }`}
+            >
+              すべて
+            </button>
+            <button
+              onClick={() => handleFilterChange('follow')}
+              className={`px-3 py-2 text-sm rounded-md ${
+                filterType === 'follow'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span className="mr-1">👤</span>フォロー
+            </button>
+            <button
+              onClick={() => handleFilterChange('like')}
+              className={`px-3 py-2 text-sm rounded-md ${
+                filterType === 'like'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span className="mr-1">❤️</span>いいね
+            </button>
+            <button
+              onClick={() => handleFilterChange('reply')}
+              className={`px-3 py-2 text-sm rounded-md ${
+                filterType === 'reply'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span className="mr-1">💬</span>返信
+            </button>
+            <button
+              onClick={() => handleFilterChange('mention')}
+              className={`px-3 py-2 text-sm rounded-md ${
+                filterType === 'mention'
+                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                  : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
+              }`}
+            >
+              <span className="mr-1">@️</span>メンション
+            </button>
+          </div>
         </div>
-      </header>
+      </div>
       
       {/* メインコンテンツ */}
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+      <main className="max-w-3xl mx-auto px-4 py-4">
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
           {loading && notifications.length === 0 ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400">
@@ -161,57 +204,25 @@ const NotificationsPage = () => {
             <div className="p-8 text-center text-red-500">
               {error}
             </div>
-          ) : notifications.length === 0 ? (
+          ) : groupedNotifications.length === 0 ? (
             <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-              通知はありません
+              {filterType === 'all' 
+                ? '通知はありません' 
+                : `${filterType}タイプの通知はありません`}
             </div>
           ) : (
             <ul>
-              {notifications.map(notification => (
+              {groupedNotifications.map(notification => (
                 <li
                   key={notification.id}
                   className={`border-b border-gray-200 dark:border-gray-700 last:border-b-0 ${
-                    !notification.is_read ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    !notification.read ? 'bg-blue-50 dark:bg-blue-900/20' : ''
                   }`}
                 >
-                  <button
-                    onClick={() => handleNotificationClick(notification)}
-                    className="w-full text-left p-4 flex items-start hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                  >
-                    {/* アクターのアバター */}
-                    <div className="mr-4 mt-1">
-                      <img
-                        src={notification.actor_avatar_url || '/default-avatar.png'}
-                        alt={`${notification.actor_display_name}のアバター`}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    </div>
-                    
-                    {/* 通知内容 */}
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-gray-900 dark:text-white">
-                            <span className="mr-2">{getNotificationIcon(notification.type)}</span>
-                            {getNotificationMessage(notification)}
-                          </p>
-                          
-                          {notification.content && (
-                            <p className="mt-1 text-gray-600 dark:text-gray-300 text-sm">
-                              {notification.content.length > 100
-                                ? `${notification.content.substring(0, 100)}...`
-                                : notification.content}
-                            </p>
-                          )}
-                        </div>
-                        
-                        {/* 日付 */}
-                        <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap ml-2">
-                          {formatDate(notification.created_at)}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
+                  <NotificationCard
+                    notification={notification}
+                    onClick={handleNotificationClick}
+                  />
                 </li>
               ))}
             </ul>

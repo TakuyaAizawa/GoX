@@ -32,7 +32,7 @@ export const getHomeTimeline = async (params?: TimelineParams): Promise<Post[]> 
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/timeline/home${query}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/timeline/home${query}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -45,18 +45,18 @@ export const getHomeTimeline = async (params?: TimelineParams): Promise<Post[]> 
     }
     
     const data = await response.json();
-    console.log('ホームタイムラインデータ:', data);
+    console.log('ホームタイムラインレスポンス:', data);
     
     // APIレスポンス形式に応じてデータを取得
     return data.posts || data.data?.posts || [];
   } catch (error) {
-    console.error('ホームタイムライン取得エラー:', error);
+    console.error('タイムライン取得エラー:', error);
     throw error;
   }
 };
 
 /**
- * エクスプローラータイムラインを取得する（人気/最新の投稿）
+ * エクスプローラータイムラインを取得する（すべてのユーザーの人気投稿）
  */
 export const getExploreTimeline = async (params?: TimelineParams): Promise<Post[]> => {
   try {
@@ -65,7 +65,7 @@ export const getExploreTimeline = async (params?: TimelineParams): Promise<Post[
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/timeline/explore${query}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/timeline/explore${query}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -78,7 +78,6 @@ export const getExploreTimeline = async (params?: TimelineParams): Promise<Post[
     }
     
     const data = await response.json();
-    console.log('エクスプローラータイムラインデータ:', data);
     
     // APIレスポンス形式に応じてデータを取得
     return data.posts || data.data?.posts || [];
@@ -89,20 +88,22 @@ export const getExploreTimeline = async (params?: TimelineParams): Promise<Post[
 };
 
 /**
- * 新しい投稿を作成する
+ * 投稿を作成する
  */
 export const createPost = async (content: string, parentId?: string): Promise<Post> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts`, {
+    const postData: any = { content };
+    if (parentId) {
+      postData.parent_id = parentId;
+    }
+    
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       },
-      body: JSON.stringify({
-        content,
-        parent_id: parentId
-      })
+      body: JSON.stringify(postData)
     });
     
     if (!response.ok) {
@@ -110,7 +111,6 @@ export const createPost = async (content: string, parentId?: string): Promise<Po
     }
     
     const data = await response.json();
-    console.log('投稿作成レスポンス:', data);
     
     // APIレスポンス形式に応じてデータを取得
     return data.post || data.data?.post;
@@ -121,11 +121,11 @@ export const createPost = async (content: string, parentId?: string): Promise<Po
 };
 
 /**
- * 指定した投稿にいいねをする
+ * 投稿にいいねする
  */
 export const likePost = async (postId: string): Promise<void> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts/${postId}/like`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts/${postId}/like`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -143,11 +143,11 @@ export const likePost = async (postId: string): Promise<void> => {
 };
 
 /**
- * 指定した投稿のいいねを取り消す
+ * いいねを取り消す
  */
 export const unlikePost = async (postId: string): Promise<void> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts/${postId}/like`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts/${postId}/like`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',
@@ -165,11 +165,11 @@ export const unlikePost = async (postId: string): Promise<void> => {
 };
 
 /**
- * 指定したIDの投稿を取得する
+ * 投稿を取得する
  */
 export const getPost = async (postId: string): Promise<Post> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts/${postId}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts/${postId}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -192,7 +192,7 @@ export const getPost = async (postId: string): Promise<Post> => {
 };
 
 /**
- * 指定した投稿へのリプライを取得する
+ * 投稿へのリプライを取得する
  */
 export const getReplies = async (postId: string, params?: TimelineParams): Promise<Post[]> => {
   try {
@@ -201,7 +201,7 @@ export const getReplies = async (postId: string, params?: TimelineParams): Promi
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts/${postId}/replies${query}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts/${postId}/replies${query}`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -210,7 +210,7 @@ export const getReplies = async (postId: string, params?: TimelineParams): Promi
     });
     
     if (!response.ok) {
-      throw new Error('リプライの取得に失敗しました');
+      throw new Error('返信の取得に失敗しました');
     }
     
     const data = await response.json();
@@ -218,17 +218,17 @@ export const getReplies = async (postId: string, params?: TimelineParams): Promi
     // APIレスポンス形式に応じてデータを取得
     return data.posts || data.data?.posts || [];
   } catch (error) {
-    console.error('リプライ取得エラー:', error);
+    console.error('返信取得エラー:', error);
     throw error;
   }
 };
 
 /**
- * 指定した投稿を削除する
+ * 投稿を削除する
  */
 export const deletePost = async (postId: string): Promise<void> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/posts/${postId}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts/${postId}`, {
       method: 'DELETE',
       headers: {
         'Content-Type': 'application/json',

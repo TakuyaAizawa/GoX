@@ -1,8 +1,8 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios';
 import { logApiResponse, logApiError, PerformanceTimer } from '../components/debug/DebugHelper';
 
-// 完全な基本URLを指定
-const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}`;
+// 基本URLを指定
+const API_BASE_URL = `${import.meta.env.VITE_API_BASE_URL}/api/v1`;
 
 // Axiosタイプ拡張
 declare module 'axios' {
@@ -97,7 +97,7 @@ apiClient.interceptors.response.use(
       try {
         // トークンのリフレッシュ処理
         const refreshToken = localStorage.getItem('refreshToken');
-        const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+        const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/v1/auth/refresh`, {
           refresh_token: refreshToken,
         });
         const { token } = response.data;

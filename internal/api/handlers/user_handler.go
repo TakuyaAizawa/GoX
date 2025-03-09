@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 
@@ -61,12 +63,25 @@ func (h *UserHandler) GetUserProfile(c *gin.Context) {
 	// 現在のユーザーがフォローしているかどうかを確認
 	isFollowing := false
 	if currentUserIDStr, exists := c.Get("userID"); exists {
-		currentUserID, err := uuid.Parse(currentUserIDStr.(string))
-		if err == nil && currentUserID != user.ID {
+		var currentUserID uuid.UUID
+
+		// 型を確認してから適切に処理
+		switch v := currentUserIDStr.(type) {
+		case string:
+			currentUserID, err = uuid.Parse(v)
+			if err != nil {
+				h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
+			}
+		case uuid.UUID:
+			currentUserID = v
+		default:
+			h.log.Error("不明なユーザーID型", "type", fmt.Sprintf("%T", v))
+		}
+
+		if currentUserID != uuid.Nil && currentUserID != user.ID {
 			isFollowing, err = h.followRepo.IsFollowing(c, currentUserID, user.ID)
 			if err != nil {
 				h.log.Error("フォロー状態の確認中にエラーが発生しました", "error", err)
-				// エラーがあってもプロフィール表示は続行
 			}
 		}
 	}
@@ -200,8 +215,12 @@ func (h *UserHandler) GetFollowers(c *gin.Context) {
 	// ユーザーをユーザー名で検索
 	user, err := h.userRepo.GetByUsername(c, username)
 	if err != nil {
-		h.log.Error("ユーザー取得中にエラーが発生しました", "error", err)
-		response.NotFound(c, "ユーザーが見つかりません")
+		h.log.Error("ユーザー取得中にエラーが発生しました", "error", err, "username", username)
+		if errors.Is(err, sql.ErrNoRows) { // 具体的なエラータイプをチェック
+			response.NotFound(c, "ユーザーが見つかりません")
+		} else {
+			response.InternalServerError(c, "データベースエラーが発生しました")
+		}
 		return
 	}
 
