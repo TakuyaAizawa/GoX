@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/TakuyaAizawa/gox/internal/repository/interfaces"
+	"github.com/TakuyaAizawa/gox/internal/service"
 	"github.com/TakuyaAizawa/gox/internal/util/response"
 	"github.com/TakuyaAizawa/gox/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -12,10 +13,11 @@ import (
 
 // UserHandler ユーザー関連のハンドラーを管理する構造体
 type UserHandler struct {
-	userRepo   interfaces.UserRepository
-	followRepo interfaces.FollowRepository
-	postRepo   interfaces.PostRepository
-	log        logger.Logger
+	userRepo            interfaces.UserRepository
+	followRepo          interfaces.FollowRepository
+	postRepo            interfaces.PostRepository
+	notificationService *service.NotificationService
+	log                 logger.Logger
 }
 
 // NewUserHandler 新しいユーザーハンドラーを作成する
@@ -23,13 +25,15 @@ func NewUserHandler(
 	userRepo interfaces.UserRepository,
 	followRepo interfaces.FollowRepository,
 	postRepo interfaces.PostRepository,
+	notificationService *service.NotificationService,
 	log logger.Logger,
 ) *UserHandler {
 	return &UserHandler{
-		userRepo:   userRepo,
-		followRepo: followRepo,
-		postRepo:   postRepo,
-		log:        log,
+		userRepo:            userRepo,
+		followRepo:          followRepo,
+		postRepo:            postRepo,
+		notificationService: notificationService,
+		log:                 log,
 	}
 }
 
@@ -421,6 +425,19 @@ func (h *UserHandler) FollowUser(c *gin.Context) {
 	if err != nil {
 		h.log.Error("ユーザー更新中にエラーが発生しました", "error", err)
 		// エラーがあってもレスポンスは返す
+	}
+
+	// 通知の作成
+	if h.notificationService != nil {
+		err = h.notificationService.CreateFollowNotification(
+			c.Request.Context(),
+			currentUserID, // フォローした人
+			targetUser.ID, // フォローされた人
+		)
+		if err != nil {
+			h.log.Error("フォロー通知の作成中にエラーが発生しました", "error", err)
+			// 通知作成のエラーはレスポンスには影響させない
+		}
 	}
 
 	response.Success(c, gin.H{
