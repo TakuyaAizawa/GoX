@@ -1,24 +1,24 @@
 package jwt
 
 import (
-	"time"
+	// "time"
 
 	"github.com/google/uuid"
 )
 
 // JWTUtil JWTトークン操作のユーティリティ
 type JWTUtil struct {
-	secretKey      string
-	accessExpiry   int
-	refreshExpiry  int
+	secretKey     string
+	accessExpiry  int
+	refreshExpiry int
 }
 
 // NewJWTUtil 新しいJWTUtilを作成する
 func NewJWTUtil(secretKey string, accessExpiry, refreshExpiry int) *JWTUtil {
 	return &JWTUtil{
-		secretKey:      secretKey,
-		accessExpiry:   accessExpiry,
-		refreshExpiry:  refreshExpiry,
+		secretKey:     secretKey,
+		accessExpiry:  accessExpiry,
+		refreshExpiry: refreshExpiry,
 	}
 }
 
@@ -55,12 +55,12 @@ func (j *JWTUtil) ValidateAccessToken(tokenString string) (*Claims, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// トークンタイプの検証
 	if claims.Type != AccessToken {
 		return nil, ErrInvalidTokenType
 	}
-	
+
 	return claims, nil
 }
 
@@ -70,12 +70,12 @@ func (j *JWTUtil) ValidateRefreshToken(tokenString string) (*Claims, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// トークンタイプの検証
 	if claims.Type != RefreshToken {
 		return nil, ErrInvalidTokenType
 	}
-	
+
 	return claims, nil
 }
 

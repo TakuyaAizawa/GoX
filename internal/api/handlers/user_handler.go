@@ -1,10 +1,8 @@
 package handlers
 
 import (
-	"net/http"
 	"strconv"
 
-	"github.com/TakuyaAizawa/gox/internal/domain/models"
 	"github.com/TakuyaAizawa/gox/internal/repository/interfaces"
 	"github.com/TakuyaAizawa/gox/internal/util/response"
 	"github.com/TakuyaAizawa/gox/pkg/logger"
@@ -109,7 +107,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
 	if err != nil {
 		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.ServerError(c, "ユーザー情報の取得中にエラーが発生しました")
+		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
 		return
 	}
 
@@ -148,7 +146,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 	if updated {
 		if err := h.userRepo.Update(c, user); err != nil {
 			h.log.Error("ユーザー更新中にエラーが発生しました", "error", err)
-			response.ServerError(c, "プロフィールの更新中にエラーが発生しました")
+			response.InternalServerError(c, "プロフィールの更新中にエラーが発生しました")
 			return
 		}
 	}
@@ -199,33 +197,42 @@ func (h *UserHandler) GetFollowers(c *gin.Context) {
 	}
 
 	// ユーザーのフォロワーを取得
-	followers, err := h.followRepo.GetFollowers(c, user.ID, offset, perPage)
+	followerIDs, err := h.followRepo.GetFollowers(c.Request.Context(), user.ID, offset, perPage)
 	if err != nil {
 		h.log.Error("フォロワー取得中にエラーが発生しました", "error", err)
-		response.ServerError(c, "フォロワーの取得中にエラーが発生しました")
+		response.InternalServerError(c, "フォロワーの取得中にエラーが発生しました")
 		return
 	}
 
 	// フォロワーの総数を取得
-	totalFollowers, err := h.followRepo.CountFollowers(c, user.ID)
+	totalFollowers, err := h.followRepo.CountFollowers(c.Request.Context(), user.ID)
 	if err != nil {
-		h.log.Error("フォロワー数の取得中にエラーが発生しました", "error", err)
-		// エラーがあっても処理は続行
+		h.log.Error("フォロワー数取得中にエラーが発生しました", "error", err)
+		response.InternalServerError(c, "フォロワーの取得中にエラーが発生しました")
+		return
 	}
 
 	// 現在のユーザーID（認証済みの場合）
 	var currentUserID uuid.UUID
-	if currentUserIDStr, exists := c.Get("userID"); exists {
-		currentUserID, _ = uuid.Parse(currentUserIDStr.(string))
+	currentUserIDInterface, exists := c.Get("userID")
+	if exists {
+		currentUserID = currentUserIDInterface.(uuid.UUID)
 	}
 
 	// フォロワーのレスポンスを作成
-	followersResponse := make([]gin.H, 0, len(followers))
-	for _, follower := range followers {
+	followersResponse := make([]gin.H, 0, len(followerIDs))
+	for _, followerID := range followerIDs {
+		// ユーザー情報を取得
+		follower, err := h.userRepo.GetByID(c.Request.Context(), followerID)
+		if err != nil {
+			h.log.Error("フォロワー情報取得中にエラーが発生しました", "error", err, "followerID", followerID)
+			continue
+		}
+
 		// 現在のユーザーがフォロワーをフォローしているかを確認
 		isFollowing := false
 		if currentUserID != uuid.Nil && currentUserID != follower.ID {
-			isFollowing, _ = h.followRepo.IsFollowing(c, currentUserID, follower.ID)
+			isFollowing, _ = h.followRepo.IsFollowing(c.Request.Context(), currentUserID, follower.ID)
 		}
 
 		followersResponse = append(followersResponse, gin.H{
@@ -284,42 +291,51 @@ func (h *UserHandler) GetFollowing(c *gin.Context) {
 		return
 	}
 
-	// ユーザーのフォローしているユーザーを取得
-	following, err := h.followRepo.GetFollowing(c, user.ID, offset, perPage)
+	// ユーザーがフォローしているユーザーを取得
+	followingIDs, err := h.followRepo.GetFollowing(c.Request.Context(), user.ID, offset, perPage)
 	if err != nil {
 		h.log.Error("フォロー中ユーザー取得中にエラーが発生しました", "error", err)
-		response.ServerError(c, "フォロー中ユーザーの取得中にエラーが発生しました")
+		response.InternalServerError(c, "フォロー中ユーザーの取得中にエラーが発生しました")
 		return
 	}
 
 	// フォロー中ユーザーの総数を取得
-	totalFollowing, err := h.followRepo.CountFollowing(c, user.ID)
+	totalFollowing, err := h.followRepo.CountFollowing(c.Request.Context(), user.ID)
 	if err != nil {
-		h.log.Error("フォロー中ユーザー数の取得中にエラーが発生しました", "error", err)
-		// エラーがあっても処理は続行
+		h.log.Error("フォロー中ユーザー数取得中にエラーが発生しました", "error", err)
+		response.InternalServerError(c, "フォロー中ユーザーの取得中にエラーが発生しました")
+		return
 	}
 
 	// 現在のユーザーID（認証済みの場合）
 	var currentUserID uuid.UUID
-	if currentUserIDStr, exists := c.Get("userID"); exists {
-		currentUserID, _ = uuid.Parse(currentUserIDStr.(string))
+	currentUserIDInterface, exists := c.Get("userID")
+	if exists {
+		currentUserID = currentUserIDInterface.(uuid.UUID)
 	}
 
 	// フォロー中ユーザーのレスポンスを作成
-	followingResponse := make([]gin.H, 0, len(following))
-	for _, followed := range following {
-		// 現在のユーザーがこのユーザーをフォローしているかを確認
+	followingResponse := make([]gin.H, 0, len(followingIDs))
+	for _, followingID := range followingIDs {
+		// ユーザー情報を取得
+		followedUser, err := h.userRepo.GetByID(c.Request.Context(), followingID)
+		if err != nil {
+			h.log.Error("フォロー中ユーザー情報取得中にエラーが発生しました", "error", err, "followingID", followingID)
+			continue
+		}
+
+		// 現在のユーザーがフォローしているかを確認
 		isFollowing := false
-		if currentUserID != uuid.Nil && currentUserID != followed.ID {
-			isFollowing, _ = h.followRepo.IsFollowing(c, currentUserID, followed.ID)
+		if currentUserID != uuid.Nil && currentUserID != followedUser.ID {
+			isFollowing, _ = h.followRepo.IsFollowing(c.Request.Context(), currentUserID, followedUser.ID)
 		}
 
 		followingResponse = append(followingResponse, gin.H{
-			"id":           followed.ID,
-			"username":     followed.Username,
-			"display_name": followed.Name,
-			"avatar_url":   followed.ProfileImage,
-			"bio":          followed.Bio,
+			"id":           followedUser.ID,
+			"username":     followedUser.Username,
+			"display_name": followedUser.Name,
+			"avatar_url":   followedUser.ProfileImage,
+			"bio":          followedUser.Bio,
 			"is_following": isFollowing,
 		})
 	}
@@ -359,7 +375,7 @@ func (h *UserHandler) FollowUser(c *gin.Context) {
 	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
 	if err != nil {
 		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.ServerError(c, "ユーザー情報の取得中にエラーが発生しました")
+		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
 		return
 	}
 
@@ -381,7 +397,7 @@ func (h *UserHandler) FollowUser(c *gin.Context) {
 	isFollowing, err := h.followRepo.IsFollowing(c, currentUserID, targetUser.ID)
 	if err != nil {
 		h.log.Error("フォロー状態の確認中にエラーが発生しました", "error", err)
-		response.ServerError(c, "フォロー情報の確認中にエラーが発生しました")
+		response.InternalServerError(c, "フォロー情報の確認中にエラーが発生しました")
 		return
 	}
 
@@ -391,29 +407,29 @@ func (h *UserHandler) FollowUser(c *gin.Context) {
 		return
 	}
 
-	// フォローの作成
-	follow := models.NewFollow(currentUserID, targetUser.ID)
-	if err := h.followRepo.Create(c, follow); err != nil {
+	// フォロー関係を作成
+	err = h.followRepo.Follow(c.Request.Context(), currentUserID, targetUser.ID)
+	if err != nil {
 		h.log.Error("フォロー作成中にエラーが発生しました", "error", err)
-		response.ServerError(c, "フォロー処理中にエラーが発生しました")
+		response.InternalServerError(c, "フォロー処理中にエラーが発生しました")
 		return
 	}
 
-	// フォロワー数を取得
-	followerCount, err := h.followRepo.CountFollowers(c, targetUser.ID)
+	// フォロワー数を更新
+	targetUser.FollowerCount++
+	err = h.userRepo.Update(c.Request.Context(), targetUser)
 	if err != nil {
-		h.log.Error("フォロワー数の取得中にエラーが発生しました", "error", err)
+		h.log.Error("ユーザー更新中にエラーが発生しました", "error", err)
 		// エラーがあってもレスポンスは返す
-		followerCount = targetUser.FollowerCount + 1
 	}
 
 	response.Success(c, gin.H{
 		"following":       true,
-		"followers_count": followerCount,
+		"followers_count": targetUser.FollowerCount,
 	})
 }
 
-// UnfollowUser ユーザーのフォロー解除ハンドラー
+// UnfollowUser ユーザーのフォローを解除するハンドラー
 func (h *UserHandler) UnfollowUser(c *gin.Context) {
 	username := c.Param("username")
 	if username == "" {
@@ -431,7 +447,7 @@ func (h *UserHandler) UnfollowUser(c *gin.Context) {
 	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
 	if err != nil {
 		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.ServerError(c, "ユーザー情報の取得中にエラーが発生しました")
+		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
 		return
 	}
 
@@ -449,26 +465,27 @@ func (h *UserHandler) UnfollowUser(c *gin.Context) {
 		return
 	}
 
-	// フォローの削除
-	if err := h.followRepo.Delete(c, currentUserID, targetUser.ID); err != nil {
+	// フォロー関係を削除
+	err = h.followRepo.Unfollow(c.Request.Context(), currentUserID, targetUser.ID)
+	if err != nil {
 		h.log.Error("フォロー解除中にエラーが発生しました", "error", err)
-		response.ServerError(c, "フォロー解除処理中にエラーが発生しました")
+		response.InternalServerError(c, "フォロー解除処理中にエラーが発生しました")
 		return
 	}
 
-	// フォロワー数を取得
-	followerCount, err := h.followRepo.CountFollowers(c, targetUser.ID)
-	if err != nil {
-		h.log.Error("フォロワー数の取得中にエラーが発生しました", "error", err)
-		// エラーがあってもレスポンスは返す
-		if targetUser.FollowerCount > 0 {
-			followerCount = targetUser.FollowerCount - 1
+	// フォロワー数を更新
+	if targetUser.FollowerCount > 0 {
+		targetUser.FollowerCount--
+		err = h.userRepo.Update(c.Request.Context(), targetUser)
+		if err != nil {
+			h.log.Error("ユーザー更新中にエラーが発生しました", "error", err)
+			// エラーがあってもレスポンスは返す
 		}
 	}
 
 	response.Success(c, gin.H{
 		"following":       false,
-		"followers_count": followerCount,
+		"followers_count": targetUser.FollowerCount,
 	})
 }
 
@@ -505,7 +522,7 @@ func (h *UserHandler) GetUserPosts(c *gin.Context) {
 	posts, err := h.postRepo.GetByUserID(c, user.ID, offset, perPage)
 	if err != nil {
 		h.log.Error("投稿取得中にエラーが発生しました", "error", err)
-		response.ServerError(c, "投稿の取得中にエラーが発生しました")
+		response.InternalServerError(c, "投稿の取得中にエラーが発生しました")
 		return
 	}
 

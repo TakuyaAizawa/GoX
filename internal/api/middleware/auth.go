@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"net/http"
+	// "net/http"
 	"strings"
 
 	"github.com/TakuyaAizawa/gox/internal/util/jwt"
@@ -41,7 +41,7 @@ func Auth(jwtUtil *jwt.JWTUtil, log logger.Logger) gin.HandlerFunc {
 
 		// ユーザーIDをコンテキストに設定
 		c.Set("userID", claims.UserID)
-		
+
 		// その他のユーザー情報を必要に応じて設定
 		if claims.Username != "" {
 			c.Set("username", claims.Username)
@@ -49,7 +49,7 @@ func Auth(jwtUtil *jwt.JWTUtil, log logger.Logger) gin.HandlerFunc {
 		if claims.Email != "" {
 			c.Set("email", claims.Email)
 		}
-		
+
 		c.Next()
 	}
 }

@@ -29,7 +29,7 @@ func SetupRouter(
 	}
 
 	// JWTユーティリティの作成
-	jwtUtil := jwt.NewJWTUtil(cfg.JWT.Secret, cfg.JWT.AccessExpiry, cfg.JWT.RefreshExpiry)
+	jwtUtil := jwt.NewJWTUtil(cfg.JWT.Secret, cfg.JWT.ExpirationHours, cfg.JWT.RefreshExpiration)
 
 	r := gin.New()
 

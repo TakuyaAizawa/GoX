@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -9,9 +10,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/TakuyaAizawa/gox/internal/config"
 	"github.com/TakuyaAizawa/gox/internal/api/routes"
+	"github.com/TakuyaAizawa/gox/internal/config"
+	"github.com/TakuyaAizawa/gox/internal/repository/postgres"
 	"github.com/TakuyaAizawa/gox/pkg/logger"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // @title GoX API
@@ -44,8 +47,56 @@ func main() {
 	}
 	defer l.Sync()
 
+	// データベース接続文字列の構築
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Password, cfg.DB.Name, cfg.DB.SSLMode)
+
+	// コンテキストの作成
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// データベース接続プールの設定
+	dbConfig, err := pgxpool.ParseConfig(connStr)
+	if err != nil {
+		l.Fatal("データベース設定の解析に失敗しました", "error", err)
+	}
+
+	// プール接続の設定
+	dbConfig.MaxConns = 10
+	dbConfig.MinConns = 5
+	dbConfig.MaxConnLifetime = 5 * time.Minute
+	dbConfig.MaxConnIdleTime = 5 * time.Minute
+
+	// データベース接続プールの作成
+	db, err := pgxpool.NewWithConfig(ctx, dbConfig)
+	if err != nil {
+		l.Fatal("データベース接続に失敗しました", "error", err)
+	}
+	defer db.Close()
+
+	// 接続テスト
+	if err := db.Ping(ctx); err != nil {
+		l.Fatal("データベース接続テストに失敗しました", "error", err)
+	}
+	l.Info("データベースに正常に接続しました")
+
+	// リポジトリの初期化
+	userRepo := postgres.NewUserRepository(db)
+	postRepo := postgres.NewPostRepository(db)
+	followRepo := postgres.NewFollowRepository(db)
+	likeRepo := postgres.NewLikeRepository(db)
+	notificationRepo := postgres.NewNotificationRepository(db)
+
 	// ルーターのセットアップ
-	router := routes.SetupRouter(cfg, l)
+	router := routes.SetupRouter(
+		cfg,
+		l,
+		userRepo,
+		postRepo,
+		followRepo,
+		likeRepo,
+		notificationRepo,
+	)
 
 	// HTTPサーバーの設定
 	server := &http.Server{
@@ -70,7 +121,7 @@ func main() {
 	<-quit
 	l.Info("サーバーをシャットダウンしています...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if err := server.Shutdown(ctx); err != nil {
@@ -78,4 +129,4 @@ func main() {
 	}
 
 	l.Info("サーバーを終了します")
-} 
+}

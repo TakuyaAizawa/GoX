@@ -50,22 +50,22 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	usernameAvailable, err := h.userRepo.IsUsernameAvailable(c, req.Username)
 	if err != nil {
 		h.log.Error("ユーザー名の確認中にエラーが発生しました", "error", err)
-		response.ServerError(c, "ユーザー名の確認中にエラーが発生しました")
+		response.InternalServerError(c, "ユーザー名の確認中にエラーが発生しました")
 		return
 	}
 	if !usernameAvailable {
-		response.BadRequest(c, "このユーザー名は既に使用されています")
+		response.BadRequest(c, "このユーザー名は既に使用されています", nil)
 		return
 	}
 
 	emailAvailable, err := h.userRepo.IsEmailAvailable(c, req.Email)
 	if err != nil {
 		h.log.Error("メールアドレスの確認中にエラーが発生しました", "error", err)
-		response.ServerError(c, "メールアドレスの確認中にエラーが発生しました")
+		response.InternalServerError(c, "メールアドレスの確認中にエラーが発生しました")
 		return
 	}
 	if !emailAvailable {
-		response.BadRequest(c, "このメールアドレスは既に使用されています")
+		response.BadRequest(c, "このメールアドレスは既に使用されています", nil)
 		return
 	}
 
@@ -73,25 +73,25 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		h.log.Error("パスワードのハッシュ化中にエラーが発生しました", "error", err)
-		response.ServerError(c, "パスワードのハッシュ化中にエラーが発生しました")
+		response.InternalServerError(c, "パスワードのハッシュ化中にエラーが発生しました")
 		return
 	}
 
 	// 新しいユーザーを作成
 	now := time.Now().UTC()
 	user := &models.User{
-		ID:          uuid.New(),
-		Username:    req.Username,
-		Email:       req.Email,
-		Password:    string(hashedPassword),
-		Name:        req.DisplayName,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:        uuid.New(),
+		Username:  req.Username,
+		Email:     req.Email,
+		Password:  string(hashedPassword),
+		Name:      req.DisplayName,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 
 	if err := h.userRepo.Create(c, user); err != nil {
 		h.log.Error("ユーザーの作成中にエラーが発生しました", "error", err)
-		response.ServerError(c, "ユーザーの作成中にエラーが発生しました")
+		response.InternalServerError(c, "ユーザーの作成中にエラーが発生しました")
 		return
 	}
 
@@ -99,7 +99,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	token, err := h.jwtUtil.GenerateToken(user.ID.String())
 	if err != nil {
 		h.log.Error("トークンの生成中にエラーが発生しました", "error", err)
-		response.ServerError(c, "トークンの生成中にエラーが発生しました")
+		response.InternalServerError(c, "トークンの生成中にエラーが発生しました")
 		return
 	}
 
@@ -147,19 +147,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	token, err := h.jwtUtil.GenerateToken(user.ID.String())
 	if err != nil {
 		h.log.Error("トークンの生成中にエラーが発生しました", "error", err)
-		response.ServerError(c, "トークンの生成中にエラーが発生しました")
+		response.InternalServerError(c, "トークンの生成中にエラーが発生しました")
 		return
 	}
 
 	// レスポンスを返す
 	c.JSON(http.StatusOK, gin.H{
 		"user": gin.H{
-			"id":          user.ID,
-			"username":    user.Username,
-			"email":       user.Email,
+			"id":           user.ID,
+			"username":     user.Username,
+			"email":        user.Email,
 			"display_name": user.Name,
-			"avatar_url":  user.ProfileImage,
-			"bio":         user.Bio,
+			"avatar_url":   user.ProfileImage,
+			"bio":          user.Bio,
 		},
 		"token": token,
 	})
@@ -179,7 +179,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	userID, err := uuid.Parse(userIDStr.(string))
 	if err != nil {
 		h.log.Error("ユーザーIDの解析中にエラーが発生しました", "error", err)
-		response.ServerError(c, "トークンの更新中にエラーが発生しました")
+		response.InternalServerError(c, "トークンの更新中にエラーが発生しました")
 		return
 	}
 
@@ -195,7 +195,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	token, err := h.jwtUtil.GenerateToken(userID.String())
 	if err != nil {
 		h.log.Error("トークンの生成中にエラーが発生しました", "error", err)
-		response.ServerError(c, "トークンの生成中にエラーが発生しました")
+		response.InternalServerError(c, "トークンの生成中にエラーが発生しました")
 		return
 	}
 

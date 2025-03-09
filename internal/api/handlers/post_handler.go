@@ -62,7 +62,7 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
 	if err != nil {
 		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.ServerError(c, "ユーザー情報の取得中にエラーが発生しました")
+		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
 		return
 	}
 
@@ -114,7 +114,7 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 	// 投稿の保存
 	if err := h.postRepo.Create(c, post); err != nil {
 		h.log.Error("投稿の作成中にエラーが発生しました", "error", err)
-		response.ServerError(c, "投稿の作成中にエラーが発生しました")
+		response.InternalServerError(c, "投稿の作成中にエラーが発生しました")
 		return
 	}
 
@@ -273,7 +273,7 @@ func (h *PostHandler) DeletePost(c *gin.Context) {
 	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
 	if err != nil {
 		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.ServerError(c, "ユーザー情報の取得中にエラーが発生しました")
+		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
 		return
 	}
 
@@ -294,7 +294,7 @@ func (h *PostHandler) DeletePost(c *gin.Context) {
 	// 投稿の削除
 	if err := h.postRepo.Delete(c, postID); err != nil {
 		h.log.Error("投稿の削除中にエラーが発生しました", "error", err)
-		response.ServerError(c, "投稿の削除中にエラーが発生しました")
+		response.InternalServerError(c, "投稿の削除中にエラーが発生しました")
 		return
 	}
 
@@ -349,7 +349,7 @@ func (h *PostHandler) GetPostReplies(c *gin.Context) {
 	replies, err := h.postRepo.GetReplies(c, postID, offset, perPage)
 	if err != nil {
 		h.log.Error("返信取得中にエラーが発生しました", "error", err)
-		response.ServerError(c, "返信の取得中にエラーが発生しました")
+		response.InternalServerError(c, "返信の取得中にエラーが発生しました")
 		return
 	}
 
@@ -444,7 +444,7 @@ func (h *PostHandler) LikePost(c *gin.Context) {
 	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
 	if err != nil {
 		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.ServerError(c, "ユーザー情報の取得中にエラーが発生しました")
+		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
 		return
 	}
 
@@ -460,7 +460,7 @@ func (h *PostHandler) LikePost(c *gin.Context) {
 	hasLiked, err := h.likeRepo.HasLiked(c, currentUserID, postID)
 	if err != nil {
 		h.log.Error("いいね状態の確認中にエラーが発生しました", "error", err)
-		response.ServerError(c, "いいね情報の確認中にエラーが発生しました")
+		response.InternalServerError(c, "いいね情報の確認中にエラーが発生しました")
 		return
 	}
 
@@ -472,9 +472,9 @@ func (h *PostHandler) LikePost(c *gin.Context) {
 
 	// いいねの作成
 	like := models.NewLike(currentUserID, postID)
-	if err := h.likeRepo.Create(c, like); err != nil {
+	if err := h.likeRepo.Like(c.Request.Context(), like); err != nil {
 		h.log.Error("いいね作成中にエラーが発生しました", "error", err)
-		response.ServerError(c, "いいね処理中にエラーが発生しました")
+		response.InternalServerError(c, "いいね処理中にエラーが発生しました")
 		return
 	}
 
@@ -529,7 +529,7 @@ func (h *PostHandler) UnlikePost(c *gin.Context) {
 	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
 	if err != nil {
 		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.ServerError(c, "ユーザー情報の取得中にエラーが発生しました")
+		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
 		return
 	}
 
@@ -545,7 +545,7 @@ func (h *PostHandler) UnlikePost(c *gin.Context) {
 	hasLiked, err := h.likeRepo.HasLiked(c, currentUserID, postID)
 	if err != nil {
 		h.log.Error("いいね状態の確認中にエラーが発生しました", "error", err)
-		response.ServerError(c, "いいね情報の確認中にエラーが発生しました")
+		response.InternalServerError(c, "いいね情報の確認中にエラーが発生しました")
 		return
 	}
 
@@ -556,9 +556,9 @@ func (h *PostHandler) UnlikePost(c *gin.Context) {
 	}
 
 	// いいねの削除
-	if err := h.likeRepo.Delete(c, currentUserID, postID); err != nil {
+	if err := h.likeRepo.Unlike(c.Request.Context(), currentUserID, postID); err != nil {
 		h.log.Error("いいね削除中にエラーが発生しました", "error", err)
-		response.ServerError(c, "いいね解除処理中にエラーが発生しました")
+		response.InternalServerError(c, "いいね解除処理中にエラーが発生しました")
 		return
 	}
 
