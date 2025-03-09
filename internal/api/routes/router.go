@@ -8,6 +8,7 @@ import (
 	"github.com/TakuyaAizawa/gox/internal/api/middleware"
 	"github.com/TakuyaAizawa/gox/internal/config"
 	"github.com/TakuyaAizawa/gox/internal/repository/interfaces"
+	"github.com/TakuyaAizawa/gox/internal/service"
 	"github.com/TakuyaAizawa/gox/internal/util/jwt"
 	"github.com/TakuyaAizawa/gox/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -48,83 +49,127 @@ func SetupRouter(
 
 	// API v1 ルート
 	v1 := r.Group("/api/v1")
-	{
-		// ハンドラーの作成
-		authHandler := handlers.NewAuthHandler(userRepo, log, jwtUtil)
-		userHandler := handlers.NewUserHandler(userRepo, followRepo, postRepo, log)
-		postHandler := handlers.NewPostHandler(postRepo, userRepo, likeRepo, notificationRepo, log)
-		timelineHandler := handlers.NewTimelineHandler(postRepo, userRepo, followRepo, likeRepo, log)
-		notificationHandler := handlers.NewNotificationHandler(notificationRepo, userRepo, postRepo, log)
 
-		// 認証不要のエンドポイント
-		auth := v1.Group("/auth")
+	// ハンドラーの作成
+	authHandler := handlers.NewAuthHandler(userRepo, log, jwtUtil)
+	wsHandler := handlers.NewWebSocketHandler(log)
+
+	// 通知サービス
+	notificationService := service.NewNotificationService(
+		notificationRepo,
+		userRepo,
+		postRepo,
+		wsHandler.GetNotificationHub(),
+		log,
+	)
+
+	// ユーザーハンドラー
+	userHandler := handlers.NewUserHandler(
+		userRepo,
+		followRepo,
+		postRepo,
+		notificationService,
+		log,
+	)
+
+	// 投稿ハンドラー
+	postHandler := handlers.NewPostHandler(
+		postRepo,
+		userRepo,
+		likeRepo,
+		notificationRepo,
+		notificationService,
+		log,
+	)
+
+	// タイムラインハンドラー
+	timelineHandler := handlers.NewTimelineHandler(
+		postRepo,
+		userRepo,
+		followRepo,
+		likeRepo,
+		log,
+	)
+
+	// 通知ハンドラー
+	notificationHandler := handlers.NewNotificationHandler(
+		notificationRepo,
+		userRepo,
+		postRepo,
+		log,
+	)
+
+	// 認証エンドポイント
+	auth := v1.Group("/auth")
+	{
+		auth.POST("/register", authHandler.Register)
+		auth.POST("/login", authHandler.Login)
+		auth.POST("/refresh", authHandler.RefreshToken)
+		auth.POST("/logout", authHandler.Logout)
+	}
+
+	// 認証が必要なエンドポイント
+	secured := v1.Group("")
+	secured.Use(middleware.Auth(jwtUtil, log))
+	{
+		// ユーザー関連
+		users := secured.Group("/users")
 		{
-			auth.POST("/register", authHandler.Register)
-			auth.POST("/login", authHandler.Login)
-			auth.POST("/refresh", authHandler.RefreshToken)
-			auth.POST("/logout", authHandler.Logout)
+			// ユーザープロフィール
+			users.GET("/:username", userHandler.GetUserProfile)
+			users.PUT("/me", userHandler.UpdateProfile)
+
+			// TODO: プロフィール画像アップロード
+			// users.POST("/me/avatar", userHandler.UploadAvatar)
+			// users.POST("/me/banner", userHandler.UploadBanner)
+
+			// フォロー関連
+			users.POST("/:username/follow", userHandler.FollowUser)
+			users.DELETE("/:username/follow", userHandler.UnfollowUser)
+			users.GET("/:username/followers", userHandler.GetFollowers)
+			users.GET("/:username/following", userHandler.GetFollowing)
+
+			// ユーザーの投稿
+			users.GET("/:username/posts", userHandler.GetUserPosts)
 		}
 
-		// 認証が必要なエンドポイント
-		secured := v1.Group("")
-		secured.Use(middleware.Auth(jwtUtil, log))
+		// 投稿関連
+		posts := secured.Group("/posts")
 		{
-			// ユーザー関連
-			users := secured.Group("/users")
-			{
-				// ユーザープロフィール
-				users.GET("/:username", userHandler.GetUserProfile)
-				users.PUT("/me", userHandler.UpdateProfile)
+			posts.POST("", postHandler.CreatePost)
+			posts.GET("/:id", postHandler.GetPost)
+			posts.DELETE("/:id", postHandler.DeletePost)
 
-				// TODO: プロフィール画像アップロード
-				// users.POST("/me/avatar", userHandler.UploadAvatar)
-				// users.POST("/me/banner", userHandler.UploadBanner)
+			// 返信
+			posts.GET("/:id/replies", postHandler.GetPostReplies)
 
-				// フォロー関連
-				users.POST("/:username/follow", userHandler.FollowUser)
-				users.DELETE("/:username/follow", userHandler.UnfollowUser)
-				users.GET("/:username/followers", userHandler.GetFollowers)
-				users.GET("/:username/following", userHandler.GetFollowing)
+			// いいね
+			posts.POST("/:id/like", postHandler.LikePost)
+			posts.DELETE("/:id/like", postHandler.UnlikePost)
 
-				// ユーザーの投稿
-				users.GET("/:username/posts", userHandler.GetUserPosts)
-			}
+			// TODO: リポスト機能
+			// posts.POST("/:id/repost", postHandler.RepostPost)
+			// posts.DELETE("/:id/repost", postHandler.CancelRepost)
+		}
 
-			// 投稿関連
-			posts := secured.Group("/posts")
-			{
-				posts.POST("", postHandler.CreatePost)
-				posts.GET("/:id", postHandler.GetPost)
-				posts.DELETE("/:id", postHandler.DeletePost)
+		// タイムライン関連
+		timeline := secured.Group("/timeline")
+		{
+			timeline.GET("/home", timelineHandler.GetHomeTimeline)
+			timeline.GET("/explore", timelineHandler.GetExploreTimeline)
+		}
 
-				// 返信
-				posts.GET("/:id/replies", postHandler.GetPostReplies)
-
-				// いいね
-				posts.POST("/:id/like", postHandler.LikePost)
-				posts.DELETE("/:id/like", postHandler.UnlikePost)
-
-				// TODO: リポスト機能
-				// posts.POST("/:id/repost", postHandler.RepostPost)
-				// posts.DELETE("/:id/repost", postHandler.CancelRepost)
-			}
-
-			// タイムライン関連
-			timeline := secured.Group("/timeline")
-			{
-				timeline.GET("/home", timelineHandler.GetHomeTimeline)
-				timeline.GET("/explore", timelineHandler.GetExploreTimeline)
-			}
-
-			// 通知関連
-			notifications := secured.Group("/notifications")
-			{
-				notifications.GET("", notificationHandler.GetNotifications)
-				notifications.GET("/unread", notificationHandler.GetUnreadCount)
-				notifications.PUT("/read", notificationHandler.MarkAsRead)
-			}
+		// 通知エンドポイント
+		notifications := secured.Group("/notifications")
+		{
+			notifications.GET("", notificationHandler.GetNotifications)
+			notifications.GET("/unread", notificationHandler.GetUnreadCount)
+			notifications.PUT("/read", notificationHandler.MarkAsRead)
 		}
 	}
+
+	// WebSocketエンドポイント
+	v1.GET("/ws", middleware.Auth(jwtUtil, log), wsHandler.HandleWSConnection)
 
 	// 404ハンドラー
 	r.NoRoute(func(c *gin.Context) {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/TakuyaAizawa/gox/internal/domain/models"
 	"github.com/TakuyaAizawa/gox/internal/repository/interfaces"
+	"github.com/TakuyaAizawa/gox/internal/service"
 	"github.com/TakuyaAizawa/gox/internal/util/response"
 	"github.com/TakuyaAizawa/gox/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -13,11 +14,12 @@ import (
 
 // PostHandler 投稿関連のハンドラーを管理する構造体
 type PostHandler struct {
-	postRepo         interfaces.PostRepository
-	userRepo         interfaces.UserRepository
-	likeRepo         interfaces.LikeRepository
-	notificationRepo interfaces.NotificationRepository
-	log              logger.Logger
+	postRepo            interfaces.PostRepository
+	userRepo            interfaces.UserRepository
+	likeRepo            interfaces.LikeRepository
+	notificationRepo    interfaces.NotificationRepository
+	notificationService *service.NotificationService
+	log                 logger.Logger
 }
 
 // NewPostHandler 新しい投稿ハンドラーを作成する
@@ -26,14 +28,16 @@ func NewPostHandler(
 	userRepo interfaces.UserRepository,
 	likeRepo interfaces.LikeRepository,
 	notificationRepo interfaces.NotificationRepository,
+	notificationService *service.NotificationService,
 	log logger.Logger,
 ) *PostHandler {
 	return &PostHandler{
-		postRepo:         postRepo,
-		userRepo:         userRepo,
-		likeRepo:         likeRepo,
-		notificationRepo: notificationRepo,
-		log:              log,
+		postRepo:            postRepo,
+		userRepo:            userRepo,
+		likeRepo:            likeRepo,
+		notificationRepo:    notificationRepo,
+		notificationService: notificationService,
+		log:                 log,
 	}
 }
 
@@ -419,52 +423,41 @@ func (h *PostHandler) GetPostReplies(c *gin.Context) {
 	})
 }
 
-// LikePost 投稿へのいいねハンドラー
+// LikePost 投稿にいいねをするハンドラー
 func (h *PostHandler) LikePost(c *gin.Context) {
-	// 投稿IDの取得とバリデーション
-	idParam := c.Param("id")
-	if idParam == "" {
-		response.BadRequest(c, "投稿IDが必要です", nil)
-		return
-	}
-
-	postID, err := uuid.Parse(idParam)
+	// 投稿IDのパラメータ取得
+	postIDStr := c.Param("id")
+	postID, err := uuid.Parse(postIDStr)
 	if err != nil {
+		h.log.Error("投稿IDのパース中にエラーが発生しました", "error", err)
 		response.BadRequest(c, "無効な投稿IDです", nil)
 		return
 	}
 
-	// 現在のユーザーIDを取得
-	currentUserIDStr, exists := c.Get("userID")
+	// 現在のユーザーID（リクエスト処理の前に認証ミドルウェアで設定済み）
+	currentUserIDInterface, exists := c.Get("userID")
 	if !exists {
 		response.Unauthorized(c, "認証が必要です")
 		return
 	}
+	currentUserID := currentUserIDInterface.(uuid.UUID)
 
-	currentUserID, err := uuid.Parse(currentUserIDStr.(string))
-	if err != nil {
-		h.log.Error("ユーザーIDのパース中にエラーが発生しました", "error", err)
-		response.InternalServerError(c, "ユーザー情報の取得中にエラーが発生しました")
-		return
-	}
-
-	// 投稿が存在するか確認
-	post, err := h.postRepo.GetByID(c, postID)
+	// 投稿の存在確認
+	post, err := h.postRepo.GetByID(c.Request.Context(), postID)
 	if err != nil {
 		h.log.Error("投稿取得中にエラーが発生しました", "error", err)
 		response.NotFound(c, "投稿が見つかりません")
 		return
 	}
 
-	// 既にいいねしているかどうか確認
-	hasLiked, err := h.likeRepo.HasLiked(c, currentUserID, postID)
+	// 既にいいね済みかのチェック
+	hasLiked, err := h.likeRepo.HasLiked(c.Request.Context(), currentUserID, postID)
 	if err != nil {
-		h.log.Error("いいね状態の確認中にエラーが発生しました", "error", err)
-		response.InternalServerError(c, "いいね情報の確認中にエラーが発生しました")
+		h.log.Error("いいね状態確認中にエラーが発生しました", "error", err)
+		response.InternalServerError(c, "いいね処理中にエラーが発生しました")
 		return
 	}
 
-	// 既にいいねしている場合
 	if hasLiked {
 		response.BadRequest(c, "既にいいねしています", nil)
 		return
@@ -478,29 +471,24 @@ func (h *PostHandler) LikePost(c *gin.Context) {
 		return
 	}
 
-	// いいね数を増やす
-	if err := h.postRepo.IncrementLikeCount(c, postID); err != nil {
-		h.log.Error("いいねカウント更新中にエラーが発生しました", "error", err)
-		// 処理は続行
-	}
-
-	// 通知の作成（自分自身の投稿へのいいねでない場合）
-	if currentUserID != post.UserID {
-		notification := models.NewNotification(
-			post.UserID,
-			currentUserID,
-			models.NotificationTypeLike,
-			&postID,
+	// 通知サービスが設定されていれば通知を作成
+	if h.notificationService != nil {
+		// 投稿の所有者への通知
+		err = h.notificationService.CreateLikeNotification(
+			c.Request.Context(),
+			currentUserID, // いいねした人
+			post.UserID,   // 投稿主
+			post.ID,       // いいねされた投稿
 		)
-		if err := h.notificationRepo.Create(c, notification); err != nil {
-			h.log.Error("通知の作成中にエラーが発生しました", "error", err)
-			// 処理は続行
+		if err != nil {
+			h.log.Error("いいね通知の作成中にエラーが発生しました", "error", err)
+			// 通知作成のエラーはレスポンスには影響させない
 		}
 	}
 
+	// 成功レスポンス
 	response.Success(c, gin.H{
-		"liked":       true,
-		"likes_count": post.LikeCount + 1,
+		"liked": true,
 	})
 }
 
