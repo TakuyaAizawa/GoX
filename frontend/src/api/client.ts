@@ -45,75 +45,95 @@ apiClient.interceptors.request.use((config) => {
   };
 
   // デバッグ用
-  console.log('APIリクエスト:', {
-    url: config.url,
-    method: config.method,
-    headers: config.headers,
-    data: config.data
-  });
-
+  if (import.meta.env.DEV) {
+    console.log(`API Request: ${config.method?.toUpperCase() ?? 'REQUEST'} ${config.url}`, config);
+  }
+  
   return config;
+}, (error) => {
+  return Promise.reject(error);
 });
 
-// レスポンスインターセプター - エラーハンドリングとトークンリフレッシュ
+// レスポンスインターセプター - トークンリフレッシュ
 apiClient.interceptors.response.use(
   (response) => {
     // パフォーマンス計測終了
-    const { config } = response;
-    if (config.metadata?.timer) {
-      const duration = config.metadata.timer.stop();
-      response.metadata = { 
-        ...response.metadata, 
-        duration,
-        endpoint: config.url
-      };
+    const duration = new Date().getTime() - (response.config.metadata?.startTime ?? 0);
+    response.metadata = {
+      ...response.metadata,
+      duration,
+      endpoint: response.config.url
+    };
+    
+    // タイマー停止
+    response.config.metadata?.timer?.stop();
+    
+    // レスポンスをログに出力（デバッグ用）
+    if (import.meta.env.DEV) {
+      logApiResponse(response.config.url || 'unknown', response.data);
     }
-
-    // API応答をログに記録
-    logApiResponse(response.config.url || 'unknown', response.data);
     
     return response;
   },
   async (error) => {
-    // パフォーマンス計測終了（エラー時）
-    const { config } = error;
-    if (config?.metadata?.timer) {
-      config.metadata.timer.stop();
-    }
-
-    // APIエラーをログに記録
-    logApiError(
-      error.config?.url || 'unknown', 
-      {
+    // タイマー停止
+    error.config?.metadata?.timer?.stop();
+    
+    // エラーをログに出力（デバッグ用）
+    if (import.meta.env.DEV) {
+      logApiError(error.config?.url || 'unknown', {
         status: error.response?.status,
         data: error.response?.data,
         message: error.message
-      }
-    );
-
+      });
+    }
+    
     const originalRequest = error.config;
+    
+    // 401エラーで、リフレッシュトークンが有効な場合は再試行
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
-      try {
-        // トークンのリフレッシュ処理
-        const refreshToken = localStorage.getItem('refreshToken');
-        const response = await axios.post(`${import.meta.env.VITE_API_BASE_URL}/api/v1/auth/refresh`, {
-          refresh_token: refreshToken,
-        });
-        const { token } = response.data;
-        localStorage.setItem('token', token);
-        
-        // 新しいトークンでリクエストを再試行
-        originalRequest.headers.Authorization = `Bearer ${token}`;
-        return apiClient(originalRequest);
-      } catch (refreshError) {
-        // リフレッシュに失敗した場合はログアウト
-        localStorage.removeItem('token');
-        localStorage.removeItem('refreshToken');
-        window.location.href = '/login';
-        return Promise.reject(refreshError);
+      
+      const refreshToken = localStorage.getItem('refreshToken');
+      
+      if (refreshToken) {
+        try {
+          // トークンリフレッシュAPIを呼び出す
+          const response = await apiClient.post('auth/refresh', {
+            refresh_token: refreshToken
+          });
+          
+          let newToken = null;
+          
+          if (response.data.success && response.data.data && response.data.data.token) {
+            // GoX API形式の応答
+            newToken = response.data.data.token;
+          } else if (response.data.token) {
+            // 従来の応答形式
+            newToken = response.data.token;
+          }
+          
+          if (newToken) {
+            // 新しいトークンを保存
+            localStorage.setItem('token', newToken);
+            
+            // リクエストのヘッダーにトークンを追加
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            
+            // 元のリクエストを再試行
+            return axios(originalRequest);
+          }
+        } catch (refreshError) {
+          console.error('トークンリフレッシュ失敗:', refreshError);
+          // リフレッシュトークンが無効になった場合はログアウト処理
+          localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('user');
+          window.location.href = '/login';
+        }
       }
     }
+    
     return Promise.reject(error);
   }
 );

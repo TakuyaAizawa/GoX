@@ -1,3 +1,4 @@
+import apiClient from '../api/client';
 import { Post } from './postService';
 
 export interface User {
@@ -30,38 +31,24 @@ export interface UpdateProfileData {
  */
 export const getUserProfile = async (username: string): Promise<User> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/users/${username}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('ユーザープロフィールの取得に失敗しました');
-    }
-    
-    const data = await response.json();
-    console.log('ユーザープロフィール応答データ:', JSON.stringify(data, null, 2));
+    const response = await apiClient.get(`users/${username}`);
     
     // APIレスポンス形式に応じてデータを取得
     let userData = null;
     
-    if (data.user) {
-      userData = data.user;
-    } else if (data.data && data.data.user) {
-      userData = data.data.user;
-    } else if (data.success === true && data.data) {
-      userData = data.data;
+    if (response.data.user) {
+      userData = response.data.user;
+    } else if (response.data.data && response.data.data.user) {
+      userData = response.data.data.user;
+    } else if (response.data.success === true && response.data.data) {
+      userData = response.data.data;
     }
     
     if (!userData) {
-      console.error('ユーザーデータが応答に見つかりません:', data);
+      console.error('ユーザーデータが応答に見つかりません:', response.data);
       throw new Error('ユーザーデータの形式が不正です');
     }
     
-    console.log('解析されたユーザーデータ:', userData);
     return userData;
   } catch (error) {
     console.error('ユーザープロフィール取得エラー:', error);
@@ -79,23 +66,27 @@ export const getUserPosts = async (username: string, params?: UserProfileParams)
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/users/${username}/posts${query}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('ユーザー投稿の取得に失敗しました');
-    }
-    
-    const data = await response.json();
-    console.log('ユーザー投稿:', data);
+    const response = await apiClient.get(`users/${username}/posts${query}`);
     
     // APIレスポンス形式に応じてデータを取得
-    return data.posts || data.data?.posts || [];
+    let posts = null;
+    
+    if (Array.isArray(response.data)) {
+      posts = response.data;
+    } else if (Array.isArray(response.data.posts)) {
+      posts = response.data.posts;
+    } else if (response.data.data && Array.isArray(response.data.data.posts)) {
+      posts = response.data.data.posts;
+    } else if (response.data.success === true && Array.isArray(response.data.data)) {
+      posts = response.data.data;
+    }
+    
+    if (!posts) {
+      console.error('投稿データが応答に見つかりません:', response.data);
+      return [];
+    }
+    
+    return posts;
   } catch (error) {
     console.error('ユーザー投稿取得エラー:', error);
     throw error;
@@ -107,17 +98,7 @@ export const getUserPosts = async (username: string, params?: UserProfileParams)
  */
 export const followUser = async (username: string): Promise<void> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/users/${username}/follow`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('ユーザーのフォローに失敗しました');
-    }
+    await apiClient.post(`users/${username}/follow`);
   } catch (error) {
     console.error('フォローエラー:', error);
     throw error;
@@ -129,17 +110,7 @@ export const followUser = async (username: string): Promise<void> => {
  */
 export const unfollowUser = async (username: string): Promise<void> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/users/${username}/follow`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('フォロー解除に失敗しました');
-    }
+    await apiClient.delete(`users/${username}/follow`);
   } catch (error) {
     console.error('フォロー解除エラー:', error);
     throw error;
@@ -147,7 +118,7 @@ export const unfollowUser = async (username: string): Promise<void> => {
 };
 
 /**
- * フォロワー一覧を取得する
+ * フォロワーリストを取得する
  */
 export const getFollowers = async (username: string, params?: UserProfileParams): Promise<User[]> => {
   try {
@@ -156,22 +127,27 @@ export const getFollowers = async (username: string, params?: UserProfileParams)
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/users/${username}/followers${query}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('フォロワー一覧の取得に失敗しました');
-    }
-    
-    const data = await response.json();
+    const response = await apiClient.get(`users/${username}/followers${query}`);
     
     // APIレスポンス形式に応じてデータを取得
-    return data.users || data.data?.users || [];
+    let followers = null;
+    
+    if (Array.isArray(response.data)) {
+      followers = response.data;
+    } else if (Array.isArray(response.data.followers)) {
+      followers = response.data.followers;
+    } else if (response.data.data && Array.isArray(response.data.data.users)) {
+      followers = response.data.data.users;
+    } else if (response.data.success === true && Array.isArray(response.data.data)) {
+      followers = response.data.data;
+    }
+    
+    if (!followers) {
+      console.error('フォロワーデータが応答に見つかりません:', response.data);
+      return [];
+    }
+    
+    return followers;
   } catch (error) {
     console.error('フォロワー取得エラー:', error);
     throw error;
@@ -179,7 +155,7 @@ export const getFollowers = async (username: string, params?: UserProfileParams)
 };
 
 /**
- * フォロー中ユーザー一覧を取得する
+ * フォロー中のユーザーリストを取得する
  */
 export const getFollowing = async (username: string, params?: UserProfileParams): Promise<User[]> => {
   try {
@@ -188,50 +164,57 @@ export const getFollowing = async (username: string, params?: UserProfileParams)
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/users/${username}/following${query}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('フォロー中ユーザー一覧の取得に失敗しました');
-    }
-    
-    const data = await response.json();
+    const response = await apiClient.get(`users/${username}/following${query}`);
     
     // APIレスポンス形式に応じてデータを取得
-    return data.users || data.data?.users || [];
+    let following = null;
+    
+    if (Array.isArray(response.data)) {
+      following = response.data;
+    } else if (Array.isArray(response.data.following)) {
+      following = response.data.following;
+    } else if (response.data.data && Array.isArray(response.data.data.users)) {
+      following = response.data.data.users;
+    } else if (response.data.success === true && Array.isArray(response.data.data)) {
+      following = response.data.data;
+    }
+    
+    if (!following) {
+      console.error('フォロー中データが応答に見つかりません:', response.data);
+      return [];
+    }
+    
+    return following;
   } catch (error) {
-    console.error('フォロー中ユーザー取得エラー:', error);
+    console.error('フォロー中取得エラー:', error);
     throw error;
   }
 };
 
 /**
- * プロフィール情報を更新する
+ * プロフィールを更新する
  */
 export const updateProfile = async (profileData: UpdateProfileData): Promise<User> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/users/me`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify(profileData)
-    });
-    
-    if (!response.ok) {
-      throw new Error('プロフィールの更新に失敗しました');
-    }
-    
-    const data = await response.json();
+    const response = await apiClient.put('users/me', profileData);
     
     // APIレスポンス形式に応じてデータを取得
-    return data.user || data.data?.user;
+    let userData = null;
+    
+    if (response.data.user) {
+      userData = response.data.user;
+    } else if (response.data.data && response.data.data.user) {
+      userData = response.data.data.user;
+    } else if (response.data.success === true && response.data.data) {
+      userData = response.data.data;
+    }
+    
+    if (!userData) {
+      console.error('更新されたユーザーデータが応答に見つかりません:', response.data);
+      throw new Error('ユーザーデータの形式が不正です');
+    }
+    
+    return userData;
   } catch (error) {
     console.error('プロフィール更新エラー:', error);
     throw error;
@@ -246,25 +229,25 @@ export const uploadAvatar = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('avatar', file);
     
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/users/me/avatar`, {
-      method: 'POST',
+    const response = await apiClient.post('users/me/avatar', formData, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: formData
+        'Content-Type': 'multipart/form-data'
+      }
     });
     
-    if (!response.ok) {
-      throw new Error('アバター画像のアップロードに失敗しました');
+    let avatarUrl = null;
+    
+    if (response.data.avatar_url) {
+      avatarUrl = response.data.avatar_url;
+    } else if (response.data.data && response.data.data.avatar_url) {
+      avatarUrl = response.data.data.avatar_url;
+    } else if (response.data.success === true && response.data.data && response.data.data.url) {
+      avatarUrl = response.data.data.url;
     }
     
-    const data = await response.json();
-    console.log('アバターアップロードレスポンス:', data);
-    
-    // アバターURLを返す
-    const avatarUrl = data.data?.avatar_url || data.avatar_url;
     if (!avatarUrl) {
-      throw new Error('アバターURLの取得に失敗しました');
+      console.error('アバターURLが応答に見つかりません:', response.data);
+      throw new Error('アバターのアップロードに失敗しました');
     }
     
     return avatarUrl;
@@ -282,25 +265,25 @@ export const uploadBanner = async (file: File): Promise<string> => {
     const formData = new FormData();
     formData.append('banner', file);
     
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/users/me/banner`, {
-      method: 'POST',
+    const response = await apiClient.post('users/me/banner', formData, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: formData
+        'Content-Type': 'multipart/form-data'
+      }
     });
     
-    if (!response.ok) {
-      throw new Error('バナー画像のアップロードに失敗しました');
+    let bannerUrl = null;
+    
+    if (response.data.banner_url) {
+      bannerUrl = response.data.banner_url;
+    } else if (response.data.data && response.data.data.banner_url) {
+      bannerUrl = response.data.data.banner_url;
+    } else if (response.data.success === true && response.data.data && response.data.data.url) {
+      bannerUrl = response.data.data.url;
     }
     
-    const data = await response.json();
-    console.log('バナーアップロードレスポンス:', data);
-    
-    // バナーURLを返す
-    const bannerUrl = data.data?.banner_url || data.banner_url;
     if (!bannerUrl) {
-      throw new Error('バナーURLの取得に失敗しました');
+      console.error('バナーURLが応答に見つかりません:', response.data);
+      throw new Error('バナーのアップロードに失敗しました');
     }
     
     return bannerUrl;

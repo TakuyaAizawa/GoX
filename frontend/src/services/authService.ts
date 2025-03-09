@@ -33,17 +33,18 @@ export interface AuthResponse {
 export const login = async (credentials: LoginCredentials): Promise<AuthResponse> => {
   try {
     console.log('ログインリクエスト:', credentials);
-    const response = await apiClient.post('/auth/login', credentials);
+    const response = await apiClient.post('auth/login', credentials);
     console.log('ログインレスポンス:', response.data);
     
     // GoXのAPIはsuccessフィールドを含むレスポンス形式を使用
     if (response.data && response.data.success) {
       return response.data.data;
-    } else {
-      throw new Error(response.data?.error?.message || 'ログインに失敗しました');
     }
+    
+    // 古いAPI形式との互換性のため
+    return response.data;
   } catch (error) {
-    console.error('ログインエラー詳細:', error);
+    console.error('ログインエラー:', error);
     throw error;
   }
 };
@@ -53,35 +54,17 @@ export const login = async (credentials: LoginCredentials): Promise<AuthResponse
  */
 export const register = async (userData: RegisterData): Promise<AuthResponse> => {
   try {
-    console.log('登録リクエスト:', userData);
+    const response = await apiClient.post('auth/register', userData);
     
-    // フォームデータを作成し、必要に応じてデータ形式を調整
-    const requestData = {
-      username: userData.username,
-      email: userData.email,
-      password: userData.password,
-      display_name: userData.display_name
-    };
-    
-    // 直接APIエンドポイントにPOSTリクエストを送信
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(requestData)
-    });
-    
-    const data = await response.json();
-    console.log('登録レスポンス:', data);
-    
-    if (data && data.success) {
-      return data.data;
-    } else {
-      throw new Error(data?.error?.message || 'ユーザー登録に失敗しました');
+    // GoXのAPIはsuccessフィールドを含むレスポンス形式を使用
+    if (response.data && response.data.success) {
+      return response.data.data;
     }
+    
+    // 古いAPI形式との互換性のため
+    return response.data;
   } catch (error) {
-    console.error('登録エラー詳細:', error);
+    console.error('登録エラー:', error);
     throw error;
   }
 };
@@ -91,17 +74,17 @@ export const register = async (userData: RegisterData): Promise<AuthResponse> =>
  */
 export const refreshToken = async (refreshToken: string): Promise<{ token: string }> => {
   try {
-    console.log('トークンリフレッシュリクエスト');
-    const response = await apiClient.post('/auth/refresh', { refresh_token: refreshToken });
-    console.log('リフレッシュレスポンス:', response.data);
+    const response = await apiClient.post('auth/refresh', { refresh_token: refreshToken });
     
+    // GoXのAPIはsuccessフィールドを含むレスポンス形式を使用
     if (response.data && response.data.success) {
       return response.data.data;
-    } else {
-      throw new Error(response.data?.error?.message || 'トークンのリフレッシュに失敗しました');
     }
+    
+    // 古いAPI形式との互換性のため
+    return response.data;
   } catch (error) {
-    console.error('リフレッシュエラー詳細:', error);
+    console.error('トークンリフレッシュエラー:', error);
     throw error;
   }
 };
@@ -111,11 +94,9 @@ export const refreshToken = async (refreshToken: string): Promise<{ token: strin
  */
 export const logout = async (): Promise<void> => {
   try {
-    console.log('ログアウトリクエスト');
-    await apiClient.post('/auth/logout');
-    console.log('ログアウト成功');
+    await apiClient.post('auth/logout');
   } catch (error) {
     console.error('ログアウトエラー:', error);
-    throw error;
+    // ログアウトエラーは無視する（サーバーが応答しなくても、クライアント側でのログアウトは進める）
   }
 }; 

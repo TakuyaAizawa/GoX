@@ -23,7 +23,7 @@ export interface TimelineParams {
 }
 
 /**
- * ホームタイムラインを取得する（フォロー中のユーザーの投稿）
+ * ホームタイムライン（フォロー中のユーザーの投稿）を取得する
  */
 export const getHomeTimeline = async (params?: TimelineParams): Promise<Post[]> => {
   try {
@@ -32,31 +32,35 @@ export const getHomeTimeline = async (params?: TimelineParams): Promise<Post[]> 
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/timeline/home${query}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('タイムラインの取得に失敗しました');
-    }
-    
-    const data = await response.json();
-    console.log('ホームタイムラインレスポンス:', data);
+    const response = await apiClient.get(`timeline/home${query}`);
     
     // APIレスポンス形式に応じてデータを取得
-    return data.posts || data.data?.posts || [];
+    let posts = null;
+    
+    if (Array.isArray(response.data)) {
+      posts = response.data;
+    } else if (Array.isArray(response.data.posts)) {
+      posts = response.data.posts;
+    } else if (response.data.data && Array.isArray(response.data.data.posts)) {
+      posts = response.data.data.posts;
+    } else if (response.data.success === true && Array.isArray(response.data.data)) {
+      posts = response.data.data;
+    }
+    
+    if (!posts) {
+      console.error('投稿データが応答に見つかりません:', response.data);
+      return [];
+    }
+    
+    return posts;
   } catch (error) {
-    console.error('タイムライン取得エラー:', error);
+    console.error('ホームタイムライン取得エラー:', error);
     throw error;
   }
 };
 
 /**
- * エクスプローラータイムラインを取得する（すべてのユーザーの人気投稿）
+ * エクスプローラータイムライン（人気/トレンド投稿）を取得する
  */
 export const getExploreTimeline = async (params?: TimelineParams): Promise<Post[]> => {
   try {
@@ -65,22 +69,27 @@ export const getExploreTimeline = async (params?: TimelineParams): Promise<Post[
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/timeline/explore${query}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('エクスプローラータイムラインの取得に失敗しました');
-    }
-    
-    const data = await response.json();
+    const response = await apiClient.get(`timeline/explore${query}`);
     
     // APIレスポンス形式に応じてデータを取得
-    return data.posts || data.data?.posts || [];
+    let posts = null;
+    
+    if (Array.isArray(response.data)) {
+      posts = response.data;
+    } else if (Array.isArray(response.data.posts)) {
+      posts = response.data.posts;
+    } else if (response.data.data && Array.isArray(response.data.data.posts)) {
+      posts = response.data.data.posts;
+    } else if (response.data.success === true && Array.isArray(response.data.data)) {
+      posts = response.data.data;
+    }
+    
+    if (!posts) {
+      console.error('投稿データが応答に見つかりません:', response.data);
+      return [];
+    }
+    
+    return posts;
   } catch (error) {
     console.error('エクスプローラータイムライン取得エラー:', error);
     throw error;
@@ -88,32 +97,34 @@ export const getExploreTimeline = async (params?: TimelineParams): Promise<Post[
 };
 
 /**
- * 投稿を作成する
+ * 新しい投稿を作成する
  */
 export const createPost = async (content: string, parentId?: string): Promise<Post> => {
   try {
-    const postData: any = { content };
+    const postData: { content: string; parent_id?: string } = { content };
     if (parentId) {
       postData.parent_id = parentId;
     }
     
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify(postData)
-    });
+    const response = await apiClient.post('posts', postData);
     
-    if (!response.ok) {
+    // APIレスポンス形式に応じてデータを取得
+    let post = null;
+    
+    if (response.data.post) {
+      post = response.data.post;
+    } else if (response.data.data && response.data.data.post) {
+      post = response.data.data.post;
+    } else if (response.data.success === true && response.data.data) {
+      post = response.data.data;
+    }
+    
+    if (!post) {
+      console.error('投稿データが応答に見つかりません:', response.data);
       throw new Error('投稿の作成に失敗しました');
     }
     
-    const data = await response.json();
-    
-    // APIレスポンス形式に応じてデータを取得
-    return data.post || data.data?.post;
+    return post;
   } catch (error) {
     console.error('投稿作成エラー:', error);
     throw error;
@@ -125,17 +136,7 @@ export const createPost = async (content: string, parentId?: string): Promise<Po
  */
 export const likePost = async (postId: string): Promise<void> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts/${postId}/like`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('いいねに失敗しました');
-    }
+    await apiClient.post(`posts/${postId}/like`);
   } catch (error) {
     console.error('いいねエラー:', error);
     throw error;
@@ -143,23 +144,13 @@ export const likePost = async (postId: string): Promise<void> => {
 };
 
 /**
- * いいねを取り消す
+ * 投稿のいいねを解除する
  */
 export const unlikePost = async (postId: string): Promise<void> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts/${postId}/like`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('いいね取り消しに失敗しました');
-    }
+    await apiClient.delete(`posts/${postId}/like`);
   } catch (error) {
-    console.error('いいね取り消しエラー:', error);
+    console.error('いいね解除エラー:', error);
     throw error;
   }
 };
@@ -169,22 +160,25 @@ export const unlikePost = async (postId: string): Promise<void> => {
  */
 export const getPost = async (postId: string): Promise<Post> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts/${postId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
+    const response = await apiClient.get(`posts/${postId}`);
     
-    if (!response.ok) {
+    // APIレスポンス形式に応じてデータを取得
+    let post = null;
+    
+    if (response.data.post) {
+      post = response.data.post;
+    } else if (response.data.data && response.data.data.post) {
+      post = response.data.data.post;
+    } else if (response.data.success === true && response.data.data) {
+      post = response.data.data;
+    }
+    
+    if (!post) {
+      console.error('投稿データが応答に見つかりません:', response.data);
       throw new Error('投稿の取得に失敗しました');
     }
     
-    const data = await response.json();
-    
-    // APIレスポンス形式に応じてデータを取得
-    return data.post || data.data?.post;
+    return post;
   } catch (error) {
     console.error('投稿取得エラー:', error);
     throw error;
@@ -201,24 +195,29 @@ export const getReplies = async (postId: string, params?: TimelineParams): Promi
     if (params?.limit) queryParams.append('limit', params.limit.toString());
     
     const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts/${postId}/replies${query}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('返信の取得に失敗しました');
-    }
-    
-    const data = await response.json();
+    const response = await apiClient.get(`posts/${postId}/replies${query}`);
     
     // APIレスポンス形式に応じてデータを取得
-    return data.posts || data.data?.posts || [];
+    let replies = null;
+    
+    if (Array.isArray(response.data)) {
+      replies = response.data;
+    } else if (Array.isArray(response.data.replies)) {
+      replies = response.data.replies;
+    } else if (response.data.data && Array.isArray(response.data.data.replies)) {
+      replies = response.data.data.replies;
+    } else if (response.data.success === true && Array.isArray(response.data.data)) {
+      replies = response.data.data;
+    }
+    
+    if (!replies) {
+      console.error('リプライデータが応答に見つかりません:', response.data);
+      return [];
+    }
+    
+    return replies;
   } catch (error) {
-    console.error('返信取得エラー:', error);
+    console.error('リプライ取得エラー:', error);
     throw error;
   }
 };
@@ -228,17 +227,7 @@ export const getReplies = async (postId: string, params?: TimelineParams): Promi
  */
 export const deletePost = async (postId: string): Promise<void> => {
   try {
-    const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/v1/posts/${postId}`, {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error('投稿の削除に失敗しました');
-    }
+    await apiClient.delete(`posts/${postId}`);
   } catch (error) {
     console.error('投稿削除エラー:', error);
     throw error;
