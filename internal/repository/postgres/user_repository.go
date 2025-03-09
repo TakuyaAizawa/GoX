@@ -276,3 +276,45 @@ func (r *userRepository) Count(ctx context.Context) (int64, error) {
 
 	return count, nil
 }
+
+// UpdateAvatar updates the avatar URL for a user
+func (r *userRepository) UpdateAvatar(ctx context.Context, userID uuid.UUID, avatarURL string) error {
+	query := `
+		UPDATE users 
+		SET profile_image = $1, updated_at = NOW() 
+		WHERE id = $2
+	`
+
+	result, err := r.db.Exec(ctx, query, avatarURL, userID)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+// UpdateBanner updates the banner URL for a user
+func (r *userRepository) UpdateBanner(ctx context.Context, userID uuid.UUID, bannerURL string) error {
+	query := `
+		UPDATE users 
+		SET banner_image = $1, updated_at = NOW() 
+		WHERE id = $2
+	`
+
+	result, err := r.db.Exec(ctx, query, bannerURL, userID)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := result.RowsAffected()
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
